@@ -49,11 +49,7 @@ export function Parking() {
   );
   return (
     <>
-      <PageHeader
-        eyebrow="Numbered spaces and tenant allocations"
-        title="Parking control"
-        description="Manage parking lots, availability and the spaces linked to each agreement."
-      >
+      <PageHeader title="Parking control">
         {manage && data.leases.some((l) => canAmendParking(data, l)) && (
           <Button onClick={() => setAssign(true)}>
             <Car size={18} />
@@ -323,7 +319,6 @@ function ParkingLotForm({
   return (
     <Modal
       title={lot ? "Edit parking lot" : "Add parking lot"}
-      description="Record the actual number and location of this parking space."
       onClose={pending ? () => {} : onClose}
       wide
     >

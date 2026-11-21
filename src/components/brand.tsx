@@ -7,9 +7,6 @@ export function Brand() {
         width={108}
         height={64}
       />
-      <span className="brand-product">
-        Assets<span>Management</span>
-      </span>
     </span>
   );
 }

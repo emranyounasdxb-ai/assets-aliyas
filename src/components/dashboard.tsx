@@ -171,7 +171,6 @@ export function Dashboard() {
   return (
     <>
       <PageHeader
-        eyebrow="Your property workspace"
         title="Portfolio overview"
         description={`${data.buildings.length} properties · ${data.units.length} flats · ${data.tenants.length} tenants across your portfolio`}
       >
@@ -294,10 +293,7 @@ export function Dashboard() {
         </section>
         <section className="panel attention-panel">
           <div className="panel-header">
-            <SectionHeader
-              title="Needs attention"
-              description="Your next actions, in one place"
-            >
+            <SectionHeader title="Needs attention">
               <span className="attention-marker" aria-hidden="true" />
             </SectionHeader>
           </div>
@@ -320,10 +316,7 @@ export function Dashboard() {
       </div>
       <section className="panel dashboard-cheques">
         <div className="panel-header">
-          <SectionHeader
-            title="Cheque follow-up"
-            description="Review due dates and update payment status"
-          >
+          <SectionHeader title="Cheque follow-up">
             <Link className="text-link" href={`/cheques?view=${chequeView}`}>
               All cheques
               <ArrowRight size={16} />
@@ -419,10 +412,7 @@ export function Dashboard() {
         </section>
         <section className="panel">
           <div className="panel-header">
-            <SectionHeader
-              title="Recent activity"
-              description="Latest changes in your workspace"
-            />
+            <SectionHeader title="Recent activity" />
           </div>
           <div className="activity-list">
             {data.activities.slice(0, 4).map((a) => {

@@ -54,11 +54,7 @@ export function Agreements({
   );
   return (
     <>
-      <PageHeader
-        eyebrow="Tenancy management"
-        title="Agreements"
-        description="Annual agreements, payment schedules and signed documents."
-      >
+      <PageHeader title="Agreements">
         {["owner", "manager"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("lease")}>
             <Plus size={18} />
@@ -247,7 +243,6 @@ export function AgreementDetail({ id }: { id: string }) {
     <>
       <BackLink href="/agreements">All agreements</BackLink>
       <PageHeader
-        eyebrow="ANNUAL RENTAL AGREEMENT"
         title={lease.reference}
         description={`${tenant?.name} · ${building?.name} · Flat ${unit?.code}`}
       >
@@ -310,7 +305,6 @@ export function AgreementDetail({ id }: { id: string }) {
       <section className="panel agreement-preview">
         <div className="document-heading">
           <div>
-            <span className="eyebrow">ALIYAS ASSETS</span>
             <h2>Tenancy agreement summary</h2>
             <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
               {data.workspace.name}
@@ -471,10 +465,7 @@ export function AgreementDetail({ id }: { id: string }) {
       </div>
       <section className="panel no-print" style={{ marginTop: 24 }}>
         <div className="panel-header">
-          <SectionHeader
-            title="Cheque tracking"
-            description="Record the outcome of each rental cheque."
-          />
+          <SectionHeader title="Cheque tracking" />
         </div>
         <ChequeTable cheques={cheques} />
       </section>

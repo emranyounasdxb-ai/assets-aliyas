@@ -119,11 +119,7 @@ export function Reports() {
     .reduce((s, e) => s + e.amount, 0);
   return (
     <>
-      <PageHeader
-        eyebrow="UNDERSTAND YOUR PORTFOLIO"
-        title="The bigger picture, clearly."
-        description="Occupancy today, rental collections and tenant balances."
-      >
+      <PageHeader title="Reports">
         <Button onClick={() => window.print()}>
           <Printer size={17} />
           Print report

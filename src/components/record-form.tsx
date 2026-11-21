@@ -146,13 +146,6 @@ export function RecordForm({
   return (
     <Modal
       title={title}
-      description={
-        kind === "lease"
-          ? "Create an annual agreement and its rent cheque schedule."
-          : kind === "account"
-            ? "Keep a clear, dated record of the tenant account."
-            : `Save this ${names[kind]} in your current workspace.`
-      }
       onClose={pending ? () => {} : onClose}
       wide={!["floor", "security"].includes(kind)}
     >

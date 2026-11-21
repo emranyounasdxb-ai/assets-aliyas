@@ -188,11 +188,7 @@ export function Properties() {
     );
   return (
     <>
-      <PageHeader
-        eyebrow="Portfolio management"
-        title="Properties"
-        description="Manage buildings, occupancy and rental availability."
-      >
+      <PageHeader title="Properties">
         {["owner", "manager"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("building")}>
             <Plus size={18} />
@@ -253,9 +249,7 @@ export function Properties() {
         <div className="panel">
           <Empty
             title={
-              data.buildings.length
-                ? "No properties found"
-                : "Let's start your portfolio"
+              data.buildings.length ? "No properties found" : "No properties"
             }
             description={
               data.buildings.length
@@ -309,7 +303,6 @@ export function PropertyDetail({ id }: { id: string }) {
     <>
       <BackLink href="/properties">All properties</BackLink>
       <PageHeader
-        eyebrow={`${building.code} · ${building.area.toUpperCase()}`}
         title={building.name}
         description={building.address || `${building.area}, Ajman`}
       >
@@ -389,10 +382,7 @@ export function PropertyDetail({ id }: { id: string }) {
           </strong>
         </div>
       </div>
-      <SectionHeader
-        title="Floor by floor"
-        description="Choose a floor to explore its flats."
-      >
+      <SectionHeader title="Floor by floor">
         <select
           className="filter-select"
           aria-label="Choose floor"
@@ -530,7 +520,7 @@ export function PropertyDetail({ id }: { id: string }) {
       ) : (
         <div className="panel" style={{ marginBottom: 24 }}>
           <Empty
-            title="Every flat has a place"
+            title="No flats"
             description="Add your first flat to this building and choose its floor."
           />
         </div>
@@ -682,11 +672,7 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
   );
   return (
     <>
-      <PageHeader
-        eyebrow="Apartment inventory"
-        title="Flats"
-        description="Find the right space and keep its details up to date."
-      >
+      <PageHeader title="Flats">
         {["owner", "manager"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("unit")}>
             <Plus size={18} />

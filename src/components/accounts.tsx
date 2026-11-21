@@ -92,11 +92,7 @@ export function Cheques({ initialFilter = "all" }: { initialFilter?: string }) {
   }
   return (
     <>
-      <PageHeader
-        eyebrow="Rent and security payments"
-        title="Cheques"
-        description="Track due dates, bank deposits and cleared payments."
-      >
+      <PageHeader title="Cheques">
         <Button onClick={download}>
           <DownloadSimple size={17} />
           Export cheques
@@ -394,11 +390,7 @@ export function Wallets() {
     .reduce((s, d) => s + d.amount, 0);
   return (
     <>
-      <PageHeader
-        eyebrow="CLEAR BALANCES, COMPLETE HISTORIES"
-        title="Every tenant has an account."
-        description="Rental charges, payments and credits. Security kept separate."
-      >
+      <PageHeader title="Tenant accounts">
         {["owner", "manager", "accountant"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("account")}>
             <Plus size={18} />

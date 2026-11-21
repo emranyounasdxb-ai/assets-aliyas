@@ -247,10 +247,7 @@ export function ParkingAssignments({
   return (
     <section className="panel parking-assignments">
       <div className="panel-header">
-        <SectionHeader
-          title="Parking allocations"
-          description="Reserved spaces and their agreement history"
-        >
+        <SectionHeader title="Parking allocations">
           {manage && lease && canAmendParking(data, lease) && (
             <Button className="no-print" onClick={() => setAssign(true)}>
               <Plus size={16} />

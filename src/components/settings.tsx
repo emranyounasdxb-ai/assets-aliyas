@@ -1,14 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Buildings,
-  Check,
-  GlobeHemisphereEast,
-  LockKey,
-  Plus,
-  ShieldCheck,
-} from "@phosphor-icons/react";
+import { Check, Plus } from "@phosphor-icons/react";
 import { useApp } from "./provider";
 import {
   Avatar,
@@ -72,19 +65,14 @@ export function Settings() {
   }
   return (
     <>
-      <PageHeader
-        eyebrow="Workspace administration"
-        title="Settings"
-        description="Company details, access and the workspace you are managing."
-      />
+      <PageHeader title="Settings" />
       <div className="settings-layout">
         <div className="settings-form">
           <section className="panel padded settings-section">
             <h2>Company details</h2>
-            <p>These details appear on your internal agreement summaries.</p>
             <form onSubmit={save} key={data.workspace.id}>
               <div className="form-grid">
-                <Field wide label="Company / workspace name">
+                <Field wide label="Company name">
                   <input
                     name="name"
                     required
@@ -131,11 +119,7 @@ export function Settings() {
             </form>
           </section>
           <section className="panel padded settings-section">
-            <h2>Your team</h2>
-            <p>
-              Workspace access is assigned by role. Documents and financial
-              changes have separate permissions.
-            </p>
+            <h2>Team</h2>
             {data.members.map((m) => (
               <div className="member-row" key={m.user_id}>
                 <Avatar name={m.display_name} />
@@ -160,9 +144,6 @@ export function Settings() {
           </section>
           <section className="panel padded settings-section">
             <h2>Working defaults</h2>
-            <p>
-              Keep dates, amounts and schedules consistent across the portfolio.
-            </p>
             <div className="profile-contact">
               <div>
                 <small>Currency</small>
@@ -194,9 +175,6 @@ export function Settings() {
         <div className="detail-stack">
           <section className="panel padded settings-section">
             <h2>Current workspace</h2>
-            <p>
-              Each workspace keeps its properties and tenant records separate.
-            </p>
             <select
               className="workspace-select"
               aria-label="Switch workspace"
@@ -210,22 +188,14 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <div style={{ marginTop: 16 }}>
-              <Badge tone={data.workspace.is_demo ? "warning" : "mint"}>
-                {data.workspace.is_demo
-                  ? "Fictional demo records"
-                  : "Your property records"}
-              </Badge>
-            </div>
+            {data.workspace.is_demo && (
+              <div style={{ marginTop: 16 }}>
+                <Badge tone="warning">Fictional demo records</Badge>
+              </div>
+            )}
           </section>
           {owner && (
-            <section className="settings-callout">
-              <Buildings size={27} />
-              <h3>Start with your own portfolio.</h3>
-              <p>
-                Create an empty workspace for your actual buildings. The demo
-                stays available to explore separately.
-              </p>
+            <div className="workspace-create">
               <Button
                 onClick={() => {
                   setError("");
@@ -234,40 +204,17 @@ export function Settings() {
                 }}
               >
                 <Plus size={16} />
-                Create empty workspace
+                Create workspace
               </Button>
-            </section>
-          )}
-          <section className="panel padded settings-section">
-            <LockKey size={24} style={{ color: "#819b68" }} />
-            <h2 style={{ marginTop: 16 }}>Private by design.</h2>
-            <p>
-              Documents are scanned before storage. Originals stay private,
-              replacements keep their history and file access is checked on
-              every request.
-            </p>
-            <div className="amenity-chips">
-              <span>
-                <ShieldCheck size={14} />
-                Permission checks
-              </span>
-              <span>
-                <GlobeHemisphereEast size={14} />
-                Private file links
-              </span>
             </div>
-          </section>
+          )}
         </div>
       </div>
       {create && (
-        <Modal
-          title="Create your own workspace"
-          description="Start with no demo data. Your current portfolio stays available."
-          onClose={() => setCreate(false)}
-        >
+        <Modal title="Create workspace" onClose={() => setCreate(false)}>
           <form onSubmit={createWorkspace}>
             <div className="form-grid">
-              <Field wide label="Company / workspace name">
+              <Field wide label="Company name">
                 <input
                   name="name"
                   required

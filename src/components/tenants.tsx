@@ -51,11 +51,7 @@ export function Tenants() {
   );
   return (
     <>
-      <PageHeader
-        eyebrow="Tenant management"
-        title="Tenants"
-        description="Keep tenant details, documents and rental history together."
-      >
+      <PageHeader title="Tenants">
         {["owner", "manager"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("tenant")}>
             <Plus size={18} />
@@ -222,11 +218,7 @@ export function TenantDetail({ id }: { id: string }) {
   return (
     <>
       <BackLink href="/tenants">All tenants</BackLink>
-      <PageHeader
-        title={tenant.name}
-        eyebrow="TENANT PROFILE"
-        description="Contact details, rental history and everything on the account."
-      >
+      <PageHeader title={tenant.name}>
         {manage && (
           <Button onClick={() => openForm("tenant", { ...tenant })}>
             <PencilSimple size={16} />
@@ -366,10 +358,7 @@ export function TenantDetail({ id }: { id: string }) {
           >
             <section className="panel">
               <div className="panel-header">
-                <SectionHeader
-                  title="Rental agreements"
-                  description="A complete history of this tenant's flats."
-                />
+                <SectionHeader title="Rental agreements" />
               </div>
               {leases.length ? (
                 <div className="table-wrap">
@@ -424,7 +413,7 @@ export function TenantDetail({ id }: { id: string }) {
                 </div>
               ) : (
                 <Empty
-                  title="Ready for a new chapter"
+                  title="No agreements"
                   description="Create an agreement to link this tenant to a flat."
                 />
               )}
@@ -450,10 +439,7 @@ export function TenantDetail({ id }: { id: string }) {
           >
             <section className="panel">
               <div className="panel-header">
-                <SectionHeader
-                  title="Account activity"
-                  description="Charges and payments, with the full history."
-                />
+                <SectionHeader title="Account activity" />
               </div>
               <LedgerTable tenantId={id} />
             </section>
@@ -488,16 +474,6 @@ export function TenantDetail({ id }: { id: string }) {
             )}
           </section>
           <SecurityPanel tenantId={id} />
-          <div className="panel padded">
-            <ShieldCheck size={22} style={{ color: "#859d6b" }} />
-            <h3 style={{ fontSize: 14, fontWeight: 500, marginTop: 12 }}>
-              A private place for details.
-            </h3>
-            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
-              Identity documents and bank statements are available only to
-              permitted team members.
-            </p>
-          </div>
         </div>
       </div>
     </>

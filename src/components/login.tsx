@@ -1,13 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  Buildings,
-  ShieldCheck,
-  Stack,
-  Wallet,
-} from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { Button, ErrorText, Field } from "./ui";
 import { Brand } from "./brand";
 export function Login({ demo }: { demo: boolean }) {
@@ -46,59 +40,13 @@ export function Login({ demo }: { demo: boolean }) {
     }
   }
   return (
-    <main className="login-page">
-      <section className="login-story">
-        <div className="brand">
-          <Brand />
-        </div>
-        <div className="login-story-copy">
-          <div className="eyebrow">A CLEARER VIEW OF YOUR PROPERTIES</div>
-          <h1>
-            Good properties.
-            <br />
-            Even better managed.
-          </h1>
-          <p>
-            A considered workspace for your buildings, your tenants and
-            everything in between.
-          </p>
-          <div className="login-features">
-            <span>
-              <Buildings size={20} />
-              Your entire portfolio
-            </span>
-            <span>
-              <Wallet size={20} />
-              Every rental payment
-            </span>
-            <span>
-              <ShieldCheck size={20} />
-              Documents kept private
-            </span>
-          </div>
-        </div>
-        <div className="login-buildings" aria-hidden="true">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <div key={n} className={`sketch-tower tower-${n}`}>
-              {Array.from(
-                { length: n === 3 ? 24 : 18 },
-                (_, i) => `window-${i}`,
-              ).map((id) => (
-                <i key={id} />
-              ))}
-            </div>
-          ))}
-        </div>
-        <div className="login-bottom">
-          Built around the way you manage property.
-          <Stack size={20} />
-        </div>
-      </section>
+    <main className="login-page login-clean">
       <section className="login-form-panel">
         <div className="login-form">
-          <span className="eyebrow">WELCOME TO YOUR WORKSPACE</span>
-          <h2>A little more organised.</h2>
-          <p>Sign in to manage your portfolio.</p>
+          <div className="brand">
+            <Brand />
+          </div>
+          <h1>Sign in</h1>
           <form onSubmit={(e) => signIn("login", e)}>
             <Field label="Email address">
               <input
@@ -138,11 +86,6 @@ export function Login({ demo }: { demo: boolean }) {
           </form>
           {demo && (
             <div className="demo-signin">
-              <div className="divider-label">
-                <span />
-                TAKE A LOOK AROUND
-                <span />
-              </div>
               <Button
                 className="full-width"
                 disabled={pending}
@@ -156,13 +99,6 @@ export function Login({ demo }: { demo: boolean }) {
               </small>
             </div>
           )}
-          <p className="login-note">
-            <ShieldCheck size={16} />
-            Private access for your property team.
-          </p>
-        </div>
-        <div className="login-copyright">
-          © {new Date().getFullYear()} Aliyas Assets
         </div>
       </section>
     </main>

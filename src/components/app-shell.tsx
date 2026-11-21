@@ -11,14 +11,11 @@ import {
   ChartPieSlice,
   Check,
   CheckCircle,
-  CaretRight,
   FileText,
   FolderOpen,
   Gear,
-  House,
   Key,
   List,
-  LockKey,
   MagnifyingGlass,
   Question,
   SignOut,
@@ -34,7 +31,7 @@ import {
   type AppData,
 } from "@/lib/domain";
 import { AppProvider, useApp } from "./provider";
-import { Avatar, Badge, Button, Modal, Money, SearchInput } from "./ui";
+import { Avatar, Button, Modal, Money, SearchInput } from "./ui";
 import { Brand } from "./brand";
 const mainNav = [
   { href: "/", label: "Overview", icon: SquaresFour },
@@ -238,7 +235,7 @@ function Shell({ children }: { children: ReactNode }) {
         <Link
           href="/"
           className="brand"
-          aria-label="Aliyas Assets home"
+          aria-label="Aliyas home"
           onClick={() => setMobile(false)}
         >
           <Brand />
@@ -251,20 +248,9 @@ function Shell({ children }: { children: ReactNode }) {
         >
           <X size={20} />
         </Button>
-        <div className="workspace-label">
-          <span className="workspace-icon">
-            <House size={17} />
-          </span>
-          <div>
-            <strong>{data.workspace.name}</strong>
-            <small>Ajman, UAE</small>
-          </div>
-          <LockKey size={14} />
-        </div>
         <nav>
-          <div className="nav-heading">WORKSPACE</div>
           {links(mainNav)}
-          <div className="nav-heading finance-heading">MANAGEMENT</div>
+          <div className="nav-group-gap" />
           {links(financeNav)}
         </nav>
         <div className="sidebar-bottom">
@@ -314,8 +300,6 @@ function Shell({ children }: { children: ReactNode }) {
             >
               <List size={23} />
             </Button>
-            <span className="desktop-only">Workspace</span>
-            <CaretRight className="desktop-only" size={14} />
             <strong>
               {current?.label ??
                 (pathname === "/settings" ? "Settings" : "Details")}
@@ -365,22 +349,11 @@ function Shell({ children }: { children: ReactNode }) {
             </div>
           )}
           {children}
-          <footer className="app-footer">
-            <span>
-              Aliyas Assets<span className="footer-separator">/</span>Property
-              operations
-            </span>
-            <span>
-              <LockKey size={13} />
-              Private workspace · AED · Dubai time
-            </span>
-          </footer>
         </main>
       </div>
       {search && (
         <Modal
           title="Search your workspace"
-          description="Find a property, flat, tenant or agreement."
           onClose={() => {
             setSearch(false);
             setQuery("");
@@ -499,11 +472,7 @@ function Shell({ children }: { children: ReactNode }) {
         </Modal>
       )}
       {guide && (
-        <Modal
-          title="Make yourself at home"
-          description="A quick guide to your property workspace."
-          onClose={() => setGuide(false)}
-        >
+        <Modal title="Quick guide" onClose={() => setGuide(false)}>
           <div className="guide-content">
             {[
               [
@@ -539,7 +508,6 @@ function Shell({ children }: { children: ReactNode }) {
               The account balance includes annual rent charged and existing
               opening balances. Security is always shown separately.
             </p>
-            <Badge tone="mint">Your records stay in your workspace</Badge>
           </div>
         </Modal>
       )}

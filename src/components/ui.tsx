@@ -110,12 +110,10 @@ export function Money({
   );
 }
 export function PageHeader({
-  eyebrow,
   title,
   description,
   children,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
   children?: ReactNode;
@@ -123,7 +121,6 @@ export function PageHeader({
   return (
     <div className="page-header">
       <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>

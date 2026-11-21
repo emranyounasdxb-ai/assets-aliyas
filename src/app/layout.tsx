@@ -4,8 +4,8 @@ import "./globals.css";
 import "./brand.css";
 export const metadata: Metadata = {
   title: {
-    default: "Aliyas Assets · Property management",
-    template: "%s · Aliyas Assets",
+    default: "Aliyas Real Estate · Property management",
+    template: "%s · Aliyas Real Estate",
   },
   description: "Your properties, tenants and rental accounts in one workspace.",
   robots: { index: false, follow: false },

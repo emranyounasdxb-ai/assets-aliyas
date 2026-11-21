@@ -343,14 +343,7 @@ export function DocumentPanel({
   );
   const content = (
     <>
-      <SectionHeader
-        title={title}
-        description={
-          compact
-            ? undefined
-            : "Keep the originals together. Every upload is private."
-        }
-      >
+      <SectionHeader title={title}>
         {canUpload && (
           <Button onClick={() => setUpload(true)}>
             <Plus size={16} />
@@ -417,7 +410,7 @@ export function DocumentPanel({
         </>
       ) : (
         <Empty
-          title="Everything in its place"
+          title="No documents"
           description={
             targetType === "tenant"
               ? "Add a passport, Emirates ID, bank statement or supporting document."
@@ -474,11 +467,7 @@ export function Documents() {
   );
   return (
     <>
-      <PageHeader
-        eyebrow="PRIVATE, ORGANISED & CLOSE AT HAND"
-        title="A home for your documents."
-        description="Property photos, identity documents and contracts, linked to the right record."
-      >
+      <PageHeader title="Documents">
         {["owner", "manager", "accountant"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => setUpload(true)}>
             <UploadSimple size={18} />
