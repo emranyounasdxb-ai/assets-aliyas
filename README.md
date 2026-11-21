@@ -14,6 +14,7 @@ Open http://127.0.0.1:3200 and select **Explore demo workspace**. Demo propertie
 - [Brand design and paid parking](docs/design-and-parking.md)
 - [Initial requirements and open questions](docs/requirements.md)
 - [Selected tools and development setup](docs/development-setup.md)
+- [cPanel subdomain deployment and CI](docs/cpanel-deployment.md)
 
 Run project commands on Windows through `scripts/pnpm.ps1` to use the pinned Node.js and pnpm versions. See the setup guide for installation, the local backend and verification commands.
 

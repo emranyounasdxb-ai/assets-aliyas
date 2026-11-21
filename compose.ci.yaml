@@ -1,0 +1,5 @@
+services:
+  scanner:
+    environment:
+      # The pinned full image includes signatures; CI tests only synthetic files.
+      CLAMAV_NO_FRESHCLAMD: "true"

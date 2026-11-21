@@ -14,6 +14,7 @@ Desktop.ini
 node_modules/
 .next/
 out/
+dist/
 coverage/
 playwright-report/
 test-results/
