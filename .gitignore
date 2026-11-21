@@ -8,3 +8,21 @@
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Development tools and generated output
+.tools/
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+next-env.d.ts
+
+# Private local files
+uploads/
+backups/
+supabase/.temp/
+supabase/.branches/

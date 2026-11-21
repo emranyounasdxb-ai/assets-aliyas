@@ -1,0 +1,19 @@
+packages:
+  - .
+
+saveExact: true
+engineStrict: true
+autoInstallPeers: true
+
+# Patched matcher for the shadcn generator's ts-morph dependency.
+# https://github.com/advisories/GHSA-g3hv-75wg-m249
+overrides:
+  "@ts-morph/common>minimatch": 11.0.9
+
+# Native binaries needed by image processing, Tailwind and the test runner.
+allowBuilds:
+  "@tailwindcss/oxide": true
+  esbuild: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - "@hookform/resolvers@7.0.8"

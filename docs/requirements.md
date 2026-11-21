@@ -139,4 +139,4 @@ Proposed starting assumptions, pending confirmation: an internal web application
 4. Choose the technical stack, hosting and storage based on the approved scope.
 5. Review interface designs and acceptance criteria before coding.
 
-No application stack, database schema, accounting formula or contract template is approved by this draft.
+The user has authorized selecting and installing the latest stable compatible development tools. The selected toolchain and local setup are documented in [Development Toolchain and Setup](development-setup.md). Business schema, balance calculations, contract templates and application features remain to be finalized and implemented.
