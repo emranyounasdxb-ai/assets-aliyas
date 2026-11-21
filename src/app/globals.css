@@ -1801,6 +1801,7 @@ td.cell-main .avatar {
   border-top: 1px solid var(--line);
 }
 .modal {
+  margin: auto;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 0;
