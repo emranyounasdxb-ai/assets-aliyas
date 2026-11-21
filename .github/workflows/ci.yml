@@ -76,7 +76,10 @@ jobs:
           pnpm exec node scripts/prepare-ci-env.mjs
           docker compose --env-file .env.local -f compose.services.yaml -f compose.ci.yaml up -d --wait database
           docker compose --env-file .env.local -f compose.services.yaml -f compose.ci.yaml up -d scanner
-          pnpm exec node scripts/wait-for-service.mjs scanner
+          if ! pnpm exec node scripts/wait-for-service.mjs scanner; then
+            docker logs --tail 40 aliyas-scanner
+            exit 1
+          fi
       - name: Prepare test data and build
         run: |
           pnpm exec node --env-file=.env.local scripts/migrate.mjs

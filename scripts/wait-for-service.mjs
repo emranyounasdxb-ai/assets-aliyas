@@ -13,6 +13,9 @@ while (Date.now() < deadline) {
           socket.destroy(new Error("Scanner not ready")),
         );
         socket.on("error", reject);
+        // A starting container can accept and close TCP before clamd is ready.
+        // Settle that attempt so Node retries rather than ending with exit 13.
+        socket.on("close", () => reject(new Error("Scanner not ready")));
         socket.on("connect", () => socket.write("zPING\0"));
         socket.on("data", (data) => {
           socket.end();
