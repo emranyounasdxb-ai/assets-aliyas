@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { z } from "zod";
-import { adminClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/server/database";
 import {
   apiError,
   AppError,

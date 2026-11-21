@@ -7,14 +7,6 @@ on:
         type: string
         default: https://assets.aliyasrealestate.ae
         required: true
-      supabase_url:
-        description: Production Supabase HTTPS URL
-        type: string
-        required: true
-      supabase_publishable_key:
-        description: Production public publishable key (never a secret key)
-        type: string
-        required: true
 
 permissions:
   contents: read
@@ -30,8 +22,6 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       ALIYAS_STANDALONE: "true"
       APP_ORIGIN: ${{ inputs.app_origin }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ inputs.supabase_url }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ inputs.supabase_publishable_key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

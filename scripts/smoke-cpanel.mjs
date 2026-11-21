@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { setTimeout as pause } from "node:timers/promises";
 
 const directory = path.resolve("dist/cpanel");
@@ -16,7 +17,8 @@ const child = spawn(process.execPath, ["app.cjs"], {
     ...process.env,
     HOSTNAME: "127.0.0.1",
     PORT: "3210",
-    SUPABASE_SECRET_KEY: "ci-runtime-verification-only",
+    DATABASE_URL: "mysql://ci:ci@127.0.0.1:56332/ci_verification",
+    PRIVATE_STORAGE_DIR: path.resolve(".private-files"),
     CLAMAV_HOST: "127.0.0.1",
     CLAMAV_PORT: "56331",
   },
@@ -53,6 +55,12 @@ try {
     401,
   );
   const require = createRequire(path.join(directory, "server.js"));
+  assert.equal(typeof require("mysql2/promise").createPool, "function");
+  assert.equal(typeof require("date-fns").addMonths, "function");
+  const maintenance = await import(
+    pathToFileURL(path.join(directory, "database/client.mjs")).href
+  );
+  assert.equal(typeof maintenance.adminDatabase, "function");
   const sharp = require("sharp");
   const converted = await sharp({
     create: { width: 8, height: 8, channels: 3, background: "white" },

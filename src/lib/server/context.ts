@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { serverClient } from "@/lib/supabase/server";
+import { serverClient } from "@/lib/server/database";
+import { reminders } from "../../../database/operations.mjs";
 import type { AppData, Membership } from "@/lib/domain";
 export class AppError extends Error {
   constructor(
@@ -33,11 +34,7 @@ export function requireOrigin(request: Request) {
   const host = request.headers.get("host");
   const expected =
     process.env.APP_ORIGIN || `${new URL(request.url).protocol}//${host}`;
-  if (
-    !origin ||
-    (origin !== expected &&
-      origin !== `${new URL(request.url).protocol}//${host}`)
-  )
+  if (!origin || origin !== expected)
     throw new AppError("This request could not be verified", 403);
 }
 export function requireRole(member: Membership, finance = false) {
@@ -72,6 +69,7 @@ export function apiError(error: unknown) {
 }
 export async function loadData(): Promise<AppData> {
   const { db, user, member } = await getContext();
+  await reminders(member.workspace_id);
   const tables = [
     "workspaces",
     "memberships",

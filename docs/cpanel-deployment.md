@@ -1,45 +1,47 @@
-# cPanel deployment preparation
+# cPanel deployment
 
-Planned application URL: **https://assets.aliyasrealestate.ae**. The subdomain and hosting runtime have not yet been provisioned or verified. This repository prepares a Linux Node.js deployment package; it does not automatically upload or activate anything on the hosting account.
+Application URL: **https://assets.aliyasrealestate.ae**.
 
-## Hosting requirements
+## Verified hosting setup on 21 November 2026
 
-- cPanel Application Manager or CloudLinux Setup Node.js App with a compatible Node.js 26 LTS runtime, Linux x64, and SSH/Terminal or equivalent provider access.
-- The subdomain configured in cPanel, its DNS pointing at the hosting account, and a valid HTTPS certificate.
-- A production Supabase project for PostgreSQL, authentication, private storage and scheduled reminders. Apply the repository's SQL migrations to that project after its backup and access setup are reviewed. The local Docker database is not copied into the web server's public directory.
-- A reachable private ClamAV scanner. Keep its TCP endpoint private; document uploads fail closed if scanning is unavailable. Shared cPanel accounts may require the hosting provider or a separate private service to supply it.
-- Production staff accounts and roles, private backup storage, and a tested restore procedure. The local demo login is disabled in packaged releases.
+- The subdomain exists with its own document root `/home/aliyasrealestate/assets.aliyasrealestate.ae`. The primary website remains at `/home/aliyasrealestate/public_html`.
+- AutoSSL validates the assets hostname and its www alias. The certificate expires on 19 February 2027 and cPanel reports automatic renewal. Force HTTPS Redirect is enabled for the assets domain.
+- The installed database tools identify MariaDB 10.11.20. A separate database, **`aliyasrealestate_assets`**, has been created through cPanel. Its application user and schema have not yet been deployed.
+- The existing enabled Passenger application `Aliyas Real Estate`, at `/aliyas-app`, belongs to the primary website. Do not edit, restart, unregister or overwrite it.
+- The server's default Node executable reports 24.22.3. The official Node 26.13.1 Linux x64 archive was downloaded into `/home/aliyasrealestate/assets-aliyas-runtime` and passed its official SHA256 check. Its binary currently fails because the server lacks `libatomic.so.1`, so it is not selected for hosting. The system runtime and libraries were not changed. The package supports the existing Node 24.22.3 runtime; CI verifies the same standalone server and native image processing on both Node 26.13.1 and 24.22.3 before release.
+- No website files, email accounts, mail routing or primary-domain MX/SPF/DKIM settings were changed. No application release has been activated.
 
-FTP transfers files; this application also requires the Node.js runtime and backend services. It cannot be deployed as an HTML-only export while retaining authentication, API routes, private documents and accounts.
+## Application architecture
 
-## GitHub checks
+The app connects directly to the server's existing MariaDB/MySQL, uses revocable server sessions and scrypt password hashes, and stores scanned documents in private server folders. There is no external database, authentication or storage platform to provision.
 
-The `CI` workflow runs on main pushes and pull requests:
+Create a database user restricted to `aliyasrealestate_assets`. Never use the main website's database credentials or a database root account. Keep `DATABASE_URL` and the other variables in `deploy/cpanel/.env.production.example` in private hosting configuration, outside document roots and Git.
 
-1. **Quality**: locked dependencies, formatting, lint, TypeScript, unit tests, a production build and a Linux standalone package startup check. The package check uses synthetic settings and is not a deployable production release.
-2. **Integration**: a disposable local Supabase stack and ClamAV scanner, all migrations, synthetic demo data, an optimized app and the complete browser suite. No production credentials are used.
+Use `/home/aliyasrealestate/assets-aliyas-private/files` for original documents and previews. This directory survives release replacement and must not be an Apache document root. A reachable private ClamAV scanner is required; uploads fail closed when scanning is unavailable. The server currently has no `clamdscan` or `clamscan` executable on the account's PATH; scanner service access remains to be provisioned or confirmed without changing the existing website or mail services.
 
-Actions are pinned to immutable commit SHAs. Workflow permissions are read only. Test environment files and service logs remain on the disposable runner; they are not uploaded as artifacts.
+## GitHub checks and release package
 
-## Create the production package
+`CI` runs on main pushes and pull requests. **Quality** runs locked dependency installation, formatting, lint, TypeScript, unit tests, a production build and Linux standalone package checks on both supported Node LTS runtimes. **Integration** runs a disposable MariaDB and ClamAV, migrations, fictional demo data and the complete browser suite. No hosting credentials or customer records are used.
 
-After CI is green for the exact main commit, manually run **cPanel package** in GitHub Actions. Supply the planned app origin, the production Supabase HTTPS origin and its public publishable key. These public values are baked into the build. Validation rejects secret/service keys, localhost and CI fixture settings before compiling.
+All actions use immutable commit SHAs. Service logs, traces and private environment files are not uploaded. Main is the release branch.
 
-The workflow checks that this exact main commit has successful CI, then builds on Linux and creates a versioned `.tar.gz` archive and SHA256 checksum. It packages Next's standalone server, required Linux dependencies, public assets and static chunks. Private environment files, local tools, database backups and customer uploads are excluded. No FTP credentials are requested or stored by the workflow.
+After successful CI for the exact main commit, run **cPanel package**. It creates a versioned Linux `.tar.gz` and SHA256 checksum. Only the assets app origin is an input; database credentials are configured at runtime. The archive contains the Next standalone server, static/public assets, Linux dependencies and maintenance scripts. Internal relative dependency links are preserved and verified to stay inside the release. Transfer the archive intact and extract it on Linux. Never upload Windows `node_modules` or run `npm install` over the packaged dependencies.
 
-## Upload and register later
+## Isolated activation steps
 
-1. Download the release archive and verify its checksum. Upload it through the hosting account's secure file transfer and extract it into a private application directory such as `/home/ACCOUNT/apps/assets-aliyas`, outside `public_html`. Keep the previous release for rollback.
-2. Register that application in cPanel with the deployment subdomain, base URL `/`, production mode, and startup file **`app.cjs`**. This delegates to Next's generated server; Passenger controls the first HTTP server's binding.
-3. Configure the variables listed in `deploy/cpanel/.env.production.example` through cPanel's application environment. `APP_ORIGIN` and the public Supabase settings must match the package. Set the actual server secret key and private scanner host/port only on the host.
-4. Restart the application through cPanel. Verify `/api/health`, sign in with a staff account, check workspace isolation, upload/scanning, private downloads, agreements, parking, collections and reminders. Confirm the server logs and backup/restore procedure before importing private customer documents.
+1. Confirm the existing `/usr/bin/node` runtime and private ClamAV access.
+2. Provision a separate assets database user. Configure `DATABASE_URL=mysql://ASSETS_USER:URL_ENCODED_PASSWORD@127.0.0.1:3306/aliyasrealestate_assets` and `PRIVATE_STORAGE_DIR=/home/aliyasrealestate/assets-aliyas-private/files`. Configure the actual scanner endpoint privately. No secret belongs in a public build variable.
+3. Verify the release checksum, extract into `/home/aliyasrealestate/apps/assets-aliyas/releases/<commit>`, and keep the previous release for rollback. Never extract over `/public_html`, `/aliyas-app`, mail folders or another application's directory.
+4. Run the package's `scripts/migrate.mjs` with the private environment. Its guard accepts only the dedicated assets database names. Schema creation is retryable; a checksum tracks the initial version. Future schema changes require an explicit new migration.
+5. Configure `ADMIN_EMAIL`, `ADMIN_NAME` and a private strong `ADMIN_PASSWORD`, then run `scripts/create-admin.mjs`. It creates a named owner and the real workspace, and refuses to overwrite an existing account's password. Run `scripts/seed-portfolio.mjs` with the owner's email to add only the confirmed nine buildings and 68 levels. It preserves an existing portfolio. Never run the fictional demo bootstrap in production.
+6. Register a **new** Passenger application for **assets.aliyasrealestate.ae**, base URL `/`, production mode, startup file **app.cjs**, and the private release directory. Use the existing `/usr/bin/node` 24.22.3 executable. Stock Application Manager may not expose a startup-file field: in that case set `PassengerStartupFile app.cjs` in only the assets document root, following `assets.htaccess.example`. Preserve the HTTPS redirect. Configure `ALIYAS_ENV_FILE` to a private, mode-0600 runtime file if environment-variable entry is unavailable. Preserve the primary website's existing Passenger application and configuration.
+7. Schedule `scripts/reminders.mjs` through a new cPanel cron entry, for example 04:00 UTC daily, and preserve all existing cron entries. Configure encrypted, off-device database/file backups and perform a restore rehearsal before importing private customer documents.
+8. Verify HTTPS, sign-in/sign-out, revoked sessions, workspace isolation, scanned uploads and private downloads, tenancy and parking concurrency, collections, reports and reminder generation. Check the primary website is still reachable and that its mail configuration is unchanged.
 
-Changing the public backend or app origin requires a new package. Private runtime secrets can be rotated through the hosting environment without committing them to Git. Do not run `npm install` over the prebuilt standalone package or upload a Windows `node_modules` directory; native dependencies are verified in the Linux CI package. Transfer the archive and extract it on Linux so pnpm's internal relative dependency links remain intact. The packager verifies that every link resolves inside the release.
-
-The runtime package has been designed for Passenger's standard Node.js port interception. The hosting provider's installed Node.js version, Passenger configuration and native dependency compatibility must still be verified during actual deployment.
+The `/api/health` route is a process liveness check, not proof that database credentials and scanning work. Complete the authenticated workflow checks before calling the deployment ready.
 
 ## References
 
 - [cPanel Application Manager](https://docs.cpanel.net/cpanel/software/application-manager/)
-- [Passenger Node.js port binding](https://www.phusionpassenger.com/library/indepth/nodejs/reverse_port_binding.html)
-- [Next.js standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)
+- [Passenger Node.js binding](https://www.phusionpassenger.com/library/indepth/nodejs/reverse_port_binding.html)
+- [Next standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)

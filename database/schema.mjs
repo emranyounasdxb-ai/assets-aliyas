@@ -1,0 +1,267 @@
+// MariaDB 10.11 / MySQL 8 InnoDB. Amounts are integer fils, never floats.
+export const tables = {
+  users: {
+    email: "varchar(180) not null unique",
+    password_hash: "varchar(300) not null",
+    display_name: "varchar(160) not null default ''",
+    disabled: "boolean not null default false",
+  },
+  sessions: {
+    user_id: "char(36) not null",
+    token_hash: "char(64) not null unique",
+    expires_at: "datetime(3) not null",
+    last_seen: "datetime(3) not null",
+  },
+  login_attempts: {
+    email_hash: "char(64) not null unique",
+    attempts: "int not null default 0",
+    window_start: "datetime(3) not null",
+  },
+  workspaces: {
+    name: "varchar(160) not null",
+    address: "varchar(300) not null default 'Ajman, United Arab Emirates'",
+    phone: "varchar(40) not null default ''",
+    email: "varchar(180) not null default ''",
+    is_demo: "boolean not null default false",
+  },
+  memberships: {
+    workspace_id: "char(36) not null",
+    user_id: "char(36) not null",
+    role: "enum('owner','manager','accountant','viewer') not null",
+    display_name: "varchar(160) not null",
+  },
+  buildings: {
+    workspace_id: "char(36) not null",
+    name: "varchar(160) not null",
+    code: "varchar(24) not null",
+    area: "varchar(120) not null",
+    address: "varchar(300) not null default ''",
+    amenities: "json not null default ('[]')",
+    notes: "varchar(2000) not null default ''",
+    color: "enum('sage','sand','slate','rose') not null default 'sage'",
+    declared_levels: "int check(declared_levels between 1 and 250)",
+  },
+  floors: {
+    workspace_id: "char(36) not null",
+    building_id: "char(36) not null",
+    name: "varchar(80) not null",
+    ordinal: "int not null check(ordinal between -10 and 200)",
+    purpose:
+      "enum('unspecified','residential','parking','service') not null default 'unspecified'",
+    notes: "varchar(1000) not null default ''",
+  },
+  units: {
+    workspace_id: "char(36) not null",
+    building_id: "char(36) not null",
+    floor_id: "char(36) not null",
+    code: "varchar(30) not null",
+    category: "enum('Studio','1 BHK','2 BHK','3 BHK','Shop') not null",
+    monthly_rent:
+      "bigint not null check(monthly_rent between 0 and 10000000000)",
+    area_sqft: "int not null default 0 check(area_sqft between 0 and 1000000)",
+    status: "enum('available','maintenance') not null default 'available'",
+    amenities: "json not null default ('[]')",
+    notes: "varchar(2000) not null default ''",
+  },
+  tenants: {
+    workspace_id: "char(36) not null",
+    name: "varchar(160) not null",
+    email: "varchar(180) not null default ''",
+    phone: "varchar(40) not null",
+    nationality: "varchar(80) not null default ''",
+    notes: "varchar(2000) not null default ''",
+    company_name: "varchar(160) not null default ''",
+    trade_license: "varchar(120) not null default ''",
+  },
+  leases: {
+    workspace_id: "char(36) not null",
+    tenant_id: "char(36) not null",
+    unit_id: "char(36) not null",
+    reference: "varchar(40) not null",
+    start_date: "date not null",
+    end_date: "date not null",
+    annual_rent: "bigint not null check(annual_rent between 1 and 10000000000)",
+    installments: "int not null check(installments in (1,2,3,4,6,12))",
+    status: "enum('active','ended') not null default 'active'",
+    closed_on: "date",
+    notes: "varchar(2000) not null default ''",
+  },
+  parking_lots: {
+    workspace_id: "char(36) not null",
+    building_id: "char(36) not null",
+    floor_id: "char(36)",
+    number: "varchar(40) not null",
+    status: "enum('available','blocked') not null default 'available'",
+    rate_amount: "bigint check(rate_amount between 1 and 10000000000)",
+    rate_period: "enum('monthly','yearly')",
+    notes: "varchar(1000) not null default ''",
+  },
+  parking_allocations: {
+    workspace_id: "char(36) not null",
+    lot_id: "char(36) not null",
+    lease_id: "char(36) not null",
+    tenant_id: "char(36) not null",
+    start_date: "date not null",
+    end_date: "date not null",
+    status: "enum('active','cancelled') not null default 'active'",
+    lot_label: "varchar(160) not null",
+    property_label: "varchar(160) not null",
+    rate_amount: "bigint not null check(rate_amount between 1 and 10000000000)",
+    rate_period: "enum('monthly','yearly') not null",
+    annual_charge:
+      "bigint not null check(annual_charge between 1 and 10000000000)",
+  },
+  cheques: {
+    workspace_id: "char(36) not null",
+    tenant_id: "char(36) not null",
+    lease_id: "char(36)",
+    number: "varchar(50) not null",
+    bank: "varchar(120) not null default ''",
+    amount: "bigint not null check(amount between 1 and 10000000000)",
+    due_date: "date not null",
+    purpose: "enum('rent','security') not null default 'rent'",
+    status:
+      "enum('scheduled','received','deposited','cleared','bounced','cancelled','returned') not null default 'scheduled'",
+    cleared_on: "date",
+  },
+  ledger: {
+    workspace_id: "char(36) not null",
+    tenant_id: "char(36) not null",
+    lease_id: "char(36)",
+    cheque_id: "char(36) unique",
+    parking_allocation_id: "char(36)",
+    kind: "enum('opening','rent','parking','payment','adjustment') not null",
+    amount:
+      "bigint not null check(amount between -10000000000 and 10000000000 and amount<>0)",
+    description: "varchar(300) not null",
+    entry_date: "date not null default (date(utc_timestamp()+interval 4 hour))",
+    idempotency_key: "char(36) unique",
+  },
+  deposits: {
+    workspace_id: "char(36) not null",
+    tenant_id: "char(36) not null",
+    amount: "bigint not null check(amount between 1 and 10000000000)",
+    reference: "varchar(160) not null",
+    status: "enum('held','returned') not null default 'held'",
+    received_on:
+      "date not null default (date(utc_timestamp()+interval 4 hour))",
+    returned_on: "date",
+  },
+  documents: {
+    workspace_id: "char(36) not null",
+    target_type: "enum('building','floor','unit','tenant','lease') not null",
+    target_id: "char(36) not null",
+    category:
+      "enum('Photo','Floor plan','Passport','Emirates ID','Bank statement','Trade licence','Contract','Other') not null",
+    name: "varchar(200) not null",
+    mime: "varchar(80) not null",
+    size: "int not null check(size between 1 and 20971520)",
+    storage_path: "varchar(300) not null unique",
+    thumbnail_path: "varchar(300)",
+    sha256: "char(64) not null",
+    group_id: "char(36) not null",
+    version: "int not null default 1 check(version>0)",
+    status:
+      "enum('current','superseded','archived') not null default 'current'",
+    scan_engine: "varchar(120) not null",
+    uploaded_by: "char(36) not null",
+    upload_key: "char(36) not null unique",
+  },
+  notifications: {
+    workspace_id: "char(36) not null",
+    cheque_id: "char(36) not null",
+    kind: "enum('due_soon','overdue') not null",
+  },
+  notification_reads: {
+    notification_id: "char(36) not null",
+    user_id: "char(36) not null",
+    read_at: "datetime(3) not null default current_timestamp(3)",
+  },
+  activities: {
+    workspace_id: "char(36) not null",
+    actor_id: "char(36)",
+    resource_type: "varchar(80) not null",
+    resource_id: "char(36) not null",
+    action: "varchar(40) not null",
+  },
+};
+export const constraints = {
+  sessions: ["foreign key(user_id) references users(id) on delete cascade"],
+  memberships: [
+    "unique(workspace_id,user_id)",
+    "foreign key(user_id) references users(id)",
+  ],
+  buildings: ["unique(workspace_id,code)"],
+  floors: [
+    "unique(id,building_id,workspace_id)",
+    "unique(building_id,ordinal)",
+    "foreign key(building_id,workspace_id) references buildings(id,workspace_id)",
+  ],
+  units: [
+    "rental_type boolean generated always as (category='Shop') stored",
+    "unique(building_id,rental_type,code)",
+    "foreign key(floor_id,building_id,workspace_id) references floors(id,building_id,workspace_id)",
+  ],
+  leases: [
+    "unique(workspace_id,reference)",
+    "unique(id,tenant_id,workspace_id)",
+    "check(end_date>=start_date)",
+    "foreign key(tenant_id,workspace_id) references tenants(id,workspace_id)",
+    "foreign key(unit_id,workspace_id) references units(id,workspace_id)",
+    "index(unit_id,status,start_date,end_date)",
+  ],
+  parking_lots: [
+    "floor_key varchar(36) generated always as (coalesce(rtrim(floor_id),'')) stored",
+    "unique(building_id,floor_key,number)",
+    "check((rate_amount is null)=(rate_period is null))",
+    "foreign key(building_id,workspace_id) references buildings(id,workspace_id)",
+    "foreign key(floor_id,building_id,workspace_id) references floors(id,building_id,workspace_id)",
+  ],
+  parking_allocations: [
+    "check(end_date>=start_date)",
+    "foreign key(lot_id,workspace_id) references parking_lots(id,workspace_id)",
+    "foreign key(lease_id,tenant_id,workspace_id) references leases(id,tenant_id,workspace_id)",
+    "index(lot_id,status,start_date,end_date)",
+  ],
+  cheques: [
+    "foreign key(tenant_id,workspace_id) references tenants(id,workspace_id)",
+    "foreign key(lease_id,workspace_id) references leases(id,workspace_id)",
+    "index(workspace_id,due_date,status)",
+  ],
+  ledger: [
+    "foreign key(tenant_id,workspace_id) references tenants(id,workspace_id)",
+    "foreign key(lease_id,workspace_id) references leases(id,workspace_id)",
+    "foreign key(cheque_id,workspace_id) references cheques(id,workspace_id)",
+    "foreign key(parking_allocation_id,workspace_id) references parking_allocations(id,workspace_id)",
+    "index(workspace_id,tenant_id,entry_date)",
+  ],
+  deposits: [
+    "foreign key(tenant_id,workspace_id) references tenants(id,workspace_id)",
+  ],
+  documents: [
+    "unique(group_id,version)",
+    "foreign key(uploaded_by) references users(id)",
+    "index(workspace_id,target_type,target_id)",
+  ],
+  notifications: [
+    "unique(cheque_id,kind)",
+    "foreign key(cheque_id) references cheques(id)",
+  ],
+  notification_reads: [
+    "unique(notification_id,user_id)",
+    "foreign key(notification_id) references notifications(id)",
+    "foreign key(user_id) references users(id)",
+  ],
+};
+export function createStatements() {
+  return Object.entries(tables).map(
+    ([name, columns]) =>
+      `create table if not exists \`${name}\` (id char(36) primary key,created_at datetime(3) not null default current_timestamp(3),${Object.entries(
+        columns,
+      )
+        .map(([column, type]) => `\`${column}\` ${type}`)
+        .join(
+          ",",
+        )}${columns.workspace_id ? ",unique(id,workspace_id),index(workspace_id),foreign key(workspace_id) references workspaces(id)" : ""}${constraints[name]?.length ? `,${constraints[name].join(",")}` : ""}) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`,
+  );
+}

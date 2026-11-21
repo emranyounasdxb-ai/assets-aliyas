@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { adminDatabase, DatabaseClient } from "../../database/client.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import net from "node:net";
 import { readFile } from "node:fs/promises";
@@ -8,7 +8,7 @@ import { todayDubai } from "../../src/lib/domain";
 const origin = "http://127.0.0.1:3200";
 let context: BrowserContext;
 let page: Page;
-let admin: SupabaseClient;
+let admin: DatabaseClient;
 let workspace = "";
 let tenant = "";
 let unit = "";
@@ -27,6 +27,12 @@ async function action(
     headers: { origin },
     data: { action: name, data },
   });
+}
+function required<T>(value: T | undefined): T {
+  expect(value).toBeDefined();
+  if (value === undefined)
+    throw new Error("Expected verification record was not found");
+  return value;
 }
 async function readRows(table: string) {
   const rows = [];
@@ -127,13 +133,10 @@ test.describe.serial("Property management workspace", () => {
     expect(result).toContain("FOUND");
   });
   test.beforeAll(async ({ browser }) => {
-    const backend = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const secret = process.env.SUPABASE_SECRET_KEY;
-    if (!backend || !secret || new URL(backend).hostname !== "127.0.0.1")
+    const backend = process.env.DATABASE_URL;
+    if (!backend || new URL(backend).hostname !== "127.0.0.1")
       throw new Error("Tests require the local backend");
-    admin = createClient(backend, secret, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    admin = adminDatabase();
     context = await browser.newContext();
     const login = await context.request.post(`${origin}/api/auth`, {
       headers: { origin },
@@ -293,8 +296,8 @@ test.describe.serial("Property management workspace", () => {
       bank: "Verification Bank",
     });
     expect(await readRows("ledger")).toHaveLength(count);
-    const security = (await readRows("cheques")).find(
-      (c) => c.purpose === "security",
+    const security = required(
+      (await readRows("cheques")).find((c) => c.purpose === "security"),
     );
     const invalid = await action("cheque", {
       id: security.id,
@@ -372,9 +375,11 @@ test.describe.serial("Property management workspace", () => {
     ).toBeVisible();
     const versions = await readRows("documents");
     expect(versions).toHaveLength(2);
-    const latest = versions.find((d) => d.status === "current");
+    const latest = required(versions.find((d) => d.status === "current"));
     expect(latest.version).toBe(2);
-    expect(versions.find((d) => d.id === documentId).status).toBe("superseded");
+    expect(required(versions.find((d) => d.id === documentId)).status).toBe(
+      "superseded",
+    );
     const retry = await context.request.post(`${origin}/api/documents`, {
       headers: { origin },
       multipart: {
@@ -439,11 +444,11 @@ test.describe.serial("Property management workspace", () => {
       `${origin}/api/documents/${propertyPhoto}/file?preview=1`,
     );
     expect((await preview.body()).subarray(8, 12).toString()).toBe("WEBP");
-    const stored = (await readRows("documents")).find(
-      (d) => d.id === propertyPhoto,
+    const stored = required(
+      (await readRows("documents")).find((d) => d.id === propertyPhoto),
     );
     const publicFile = await context.request.get(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/aliyas-private/${stored.storage_path}`,
+      `${origin}/${stored.storage_path}`,
     );
     expect(publicFile.status()).not.toBe(200);
   });
@@ -470,9 +475,9 @@ test.describe.serial("Property management workspace", () => {
     });
     expect(response.ok(), await response.text()).toBe(true);
     const id = (await response.json()).id;
-    expect((await readRows("documents")).find((d) => d.id === id).size).toBe(
-      pdf.length,
-    );
+    expect(
+      required((await readRows("documents")).find((d) => d.id === id)).size,
+    ).toBe(pdf.length);
   });
   test("keeps reports complete beyond the database API page size", async () => {
     const rows = Array.from({ length: 1005 }, (_, index) => ({
@@ -619,11 +624,7 @@ test.describe.serial("Property management workspace", () => {
           ).status(),
         ).toBe(200);
       } else {
-        const authClient = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
-          { auth: { persistSession: false, autoRefreshToken: false } },
-        );
+        const authClient = new DatabaseClient();
         await authClient.auth.signInWithPassword({ email, password });
         const { data: rows } = await authClient
           .from("tenants")
@@ -636,7 +637,7 @@ test.describe.serial("Property management workspace", () => {
   });
   test("edits floor use and prevents apartments on service and parking levels", async () => {
     const floors = await readRows("floors");
-    const floor = floors.find((f) => f.name === "Floor 2");
+    const floor = required(floors.find((f) => f.name === "Floor 2"));
     expect(floor).toBeTruthy();
     await page.goto(`${origin}/properties/${building}`);
     await page
@@ -655,7 +656,8 @@ test.describe.serial("Property management workspace", () => {
       .click();
     await expect(form).toHaveCount(0);
     expect(
-      (await readRows("floors")).find((f) => f.id === floor.id).purpose,
+      required((await readRows("floors")).find((f) => f.id === floor.id))
+        .purpose,
     ).toBe("service");
     const payload = {
       building_id: building,
@@ -675,8 +677,8 @@ test.describe.serial("Property management workspace", () => {
   });
   test("reserves multiple paid parking lots with the combined agreement cheque schedule", async () => {
     const floors = await readRows("floors");
-    const ground = floors.find(
-      (f) => f.building_id === building && f.ordinal === 0,
+    const ground = required(
+      floors.find((f) => f.building_id === building && f.ordinal === 0),
     );
     await page.goto(`${origin}/parking`);
     await page
@@ -706,8 +708,8 @@ test.describe.serial("Property management workspace", () => {
       notes: "Fictional verification lot",
     });
     const lots = await readRows("parking_lots");
-    const lotA = lots.find((l) => l.number === "QA-P1-A");
-    const lotB = lots.find((l) => l.number === "QA-P1-B");
+    const lotA = required(lots.find((l) => l.number === "QA-P1-A"));
+    const lotB = required(lots.find((l) => l.number === "QA-P1-B"));
     await checkedAction("unit", {
       building_id: building,
       floor_id: ground.id,
@@ -717,8 +719,8 @@ test.describe.serial("Property management workspace", () => {
       area_sqft: 500,
       amenities: [],
     });
-    const apartment = (await readRows("units")).find(
-      (u) => u.code === "QA-PARK-A",
+    const apartment = required(
+      (await readRows("units")).find((u) => u.code === "QA-PARK-A"),
     );
     await page.goto(`${origin}/agreements`);
     await page
@@ -738,8 +740,10 @@ test.describe.serial("Property management workspace", () => {
       .getByRole("button", { name: "Create agreement", exact: true })
       .click();
     await expect(form).toHaveCount(0);
-    const agreement = (await readRows("leases")).find(
-      (l) => l.reference === "QA-PARK-COMBINED",
+    const agreement = required(
+      (await readRows("leases")).find(
+        (l) => l.reference === "QA-PARK-COMBINED",
+      ),
     );
     const allocations = (await readRows("parking_allocations")).filter(
       (a) => a.lease_id === agreement.id,
@@ -767,8 +771,11 @@ test.describe.serial("Property management workspace", () => {
       rate_period: "monthly",
     });
     expect(
-      (await readRows("parking_allocations")).find((a) => a.lot_id === lotA.id)
-        .annual_charge,
+      required(
+        (await readRows("parking_allocations")).find(
+          (a) => a.lot_id === lotA.id,
+        ),
+      ).annual_charge,
     ).toBe(120000);
     await page.goto(`${origin}/agreements/${agreement.id}`);
     await expect(
@@ -793,8 +800,8 @@ test.describe.serial("Property management workspace", () => {
     const before = (await readRows("ledger")).filter(
       (e) => e.lease_id === agreement.id,
     ).length;
-    const firstCheque = (await readRows("cheques")).find(
-      (c) => c.lease_id === agreement.id,
+    const firstCheque = required(
+      (await readRows("cheques")).find((c) => c.lease_id === agreement.id),
     );
     await checkedAction("cheque", {
       id: firstCheque.id,
@@ -803,8 +810,10 @@ test.describe.serial("Property management workspace", () => {
       bank: "Verification Bank",
       on_date: todayDubai(),
     });
-    const remaining = (await readRows("parking_allocations")).find(
-      (a) => a.lease_id === agreement.id && a.status === "active",
+    const remaining = required(
+      (await readRows("parking_allocations")).find(
+        (a) => a.lease_id === agreement.id && a.status === "active",
+      ),
     );
     expect(
       (await action("parking_cancel", { id: remaining.id })).status(),
@@ -824,8 +833,10 @@ test.describe.serial("Property management workspace", () => {
     ).toBe(400);
   });
   test("prevents simultaneous double parking allocation and cross-building assignment", async () => {
-    const ground = (await readRows("floors")).find(
-      (f) => f.building_id === building && f.ordinal === 0,
+    const ground = required(
+      (await readRows("floors")).find(
+        (f) => f.building_id === building && f.ordinal === 0,
+      ),
     );
     await checkedAction("parking_lot", {
       building_id: building,
@@ -835,8 +846,8 @@ test.describe.serial("Property management workspace", () => {
       rate_amount: "1800",
       rate_period: "yearly",
     });
-    const lot = (await readRows("parking_lots")).find(
-      (l) => l.number === "QA-RACE",
+    const lot = required(
+      (await readRows("parking_lots")).find((l) => l.number === "QA-RACE"),
     );
     const ids = [];
     for (const suffix of ["B", "C"]) {
@@ -848,8 +859,8 @@ test.describe.serial("Property management workspace", () => {
         monthly_rent: "2000",
         amenities: [],
       });
-      const apartment = (await readRows("units")).find(
-        (u) => u.code === `QA-PARK-${suffix}`,
+      const apartment = required(
+        (await readRows("units")).find((u) => u.code === `QA-PARK-${suffix}`),
       );
       const id = await checkedAction("lease", {
         tenant_id: tenant,
@@ -871,7 +882,7 @@ test.describe.serial("Property management workspace", () => {
       (a) => a.lot_id === lot.id && a.status === "active",
     );
     expect(active).toHaveLength(1);
-    const loser = ids.find((id) => id !== active[0].lease_id);
+    const loser = required(ids.find((id) => id !== active[0].lease_id));
     expect(
       (await readRows("ledger")).filter(
         (e) => e.lease_id === loser && e.kind === "parking",
@@ -898,8 +909,8 @@ test.describe.serial("Property management workspace", () => {
       rate_amount: "1500",
       rate_period: "yearly",
     });
-    const otherLot = (await readRows("parking_lots")).find(
-      (l) => l.number === "ANNEX-1",
+    const otherLot = required(
+      (await readRows("parking_lots")).find((l) => l.number === "ANNEX-1"),
     );
     const rejected = await action("parking_allocate", {
       lease_id: loser,
@@ -972,8 +983,8 @@ test.describe.serial("Property management workspace", () => {
     const levels = (await readRows("floors")).filter(
       (f) => f.building_id === shopBuilding,
     );
-    const ground = levels.find((f) => f.ordinal === 0);
-    const upper = levels.find((f) => f.ordinal === 1);
+    const ground = required(levels.find((f) => f.ordinal === 0));
+    const upper = required(levels.find((f) => f.ordinal === 1));
     await page.goto(`${origin}/shops`);
     await page.getByRole("button", { name: "Add shop", exact: true }).click();
     const form = page.getByRole("dialog");
@@ -998,8 +1009,10 @@ test.describe.serial("Property management workspace", () => {
     await expect(
       page.getByRole("button", { name: "View shop S-QA-1" }),
     ).toBeVisible();
-    const shop = (await readRows("units")).find(
-      (u) => u.building_id === shopBuilding && u.category === "Shop",
+    const shop = required(
+      (await readRows("units")).find(
+        (u) => u.building_id === shopBuilding && u.category === "Shop",
+      ),
     );
     const values = {
       building_id: shopBuilding,
@@ -1080,8 +1093,8 @@ test.describe.serial("Property management workspace", () => {
       .getByRole("button", { name: "Create agreement", exact: true })
       .click();
     await expect(agreementForm).toHaveCount(0);
-    const shopLease = (await readRows("leases")).find(
-      (l) => l.reference === "QA-SHOP-ANNUAL",
+    const shopLease = required(
+      (await readRows("leases")).find((l) => l.reference === "QA-SHOP-ANNUAL"),
     );
     const checks = (await readRows("cheques")).filter(
       (c) => c.lease_id === shopLease.id,
@@ -1101,12 +1114,14 @@ test.describe.serial("Property management workspace", () => {
       ...values,
       id: shop.id,
       building_id: building,
-      floor_id: (await readRows("floors")).find(
-        (f) => f.building_id === building && f.ordinal === 0,
+      floor_id: required(
+        (await readRows("floors")).find(
+          (f) => f.building_id === building && f.ordinal === 0,
+        ),
       ).id,
     });
     expect(move.status()).toBe(400);
-    const cleared = checks.find((c) => c.due_date === todayDubai());
+    const cleared = required(checks.find((c) => c.due_date === todayDubai()));
     await checkedAction("cheque", {
       id: cleared.id,
       number: "QA-SHOP-PAID",
@@ -1193,8 +1208,10 @@ test.describe.serial("Property management workspace", () => {
         floor_count: 0,
       })
     ).result;
-    const ground = (await readRows("floors")).find(
-      (f) => f.building_id === property && f.ordinal === 0,
+    const ground = required(
+      (await readRows("floors")).find(
+        (f) => f.building_id === property && f.ordinal === 0,
+      ),
     );
     await checkedAction("floor", {
       building_id: property,
@@ -1202,8 +1219,10 @@ test.describe.serial("Property management workspace", () => {
       ordinal: 1,
       purpose: "parking",
     });
-    const parkingFloor = (await readRows("floors")).find(
-      (f) => f.building_id === property && f.ordinal === 1,
+    const parkingFloor = required(
+      (await readRows("floors")).find(
+        (f) => f.building_id === property && f.ordinal === 1,
+      ),
     );
     for (const number of [
       "REPORT-CURRENT",
@@ -1230,8 +1249,8 @@ test.describe.serial("Property management workspace", () => {
       category: "Studio",
       monthly_rent: "750",
     });
-    const flat = (await readRows("units")).find(
-      (u) => u.building_id === property,
+    const flat = required(
+      (await readRows("units")).find((u) => u.building_id === property),
     );
     const current = (
       await checkedAction("lease", {
@@ -1241,11 +1260,13 @@ test.describe.serial("Property management workspace", () => {
         annual_rent: "9000",
         installments: 4,
         reference: "QA-REPORT-CURRENT",
-        parking_lot_ids: [lots.find((l) => l.number === "REPORT-CURRENT").id],
+        parking_lot_ids: [
+          required(lots.find((l) => l.number === "REPORT-CURRENT")).id,
+        ],
       })
     ).result;
-    const currentLease = (await readRows("leases")).find(
-      (l) => l.id === current,
+    const currentLease = required(
+      (await readRows("leases")).find((l) => l.id === current),
     );
     const futureStart = new Date(
       Date.parse(`${currentLease.end_date}T12:00:00Z`) + 86400000,
@@ -1259,7 +1280,9 @@ test.describe.serial("Property management workspace", () => {
       annual_rent: "9000",
       installments: 6,
       reference: "QA-REPORT-FUTURE",
-      parking_lot_ids: [lots.find((l) => l.number === "REPORT-FUTURE").id],
+      parking_lot_ids: [
+        required(lots.find((l) => l.number === "REPORT-FUTURE")).id,
+      ],
     });
     await page.goto(`${origin}/reports`);
     await page.getByLabel("Property", { exact: true }).selectOption(property);
@@ -1419,7 +1442,9 @@ test.describe.serial("Property management workspace", () => {
   test("updates live records in another tab while preserving filters and unsaved forms through a failed refresh", async () => {
     const observer = await context.newPage();
     const actor = await context.newPage();
-    const record = (await readRows("buildings")).find((b) => b.id === building);
+    const record = required(
+      (await readRows("buildings")).find((b) => b.id === building),
+    );
     try {
       await observer.goto(`${origin}/reports`);
       await observer
@@ -1497,7 +1522,9 @@ test.describe.serial("Property management workspace", () => {
       await observer.evaluate(() => window.dispatchEvent(new Event("online")));
       const snapshot = await (await recovered).json();
       expect(
-        snapshot.buildings.find((b: { id: string }) => b.id === building).name,
+        required(
+          snapshot.buildings.find((b: { id: string }) => b.id === building),
+        ).name,
       ).toBe("Live updated building");
       await expect(
         observer.getByRole("dialog").getByLabel("Full name", { exact: true }),

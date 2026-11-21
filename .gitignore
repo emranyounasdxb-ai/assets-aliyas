@@ -15,6 +15,9 @@ node_modules/
 .next/
 out/
 dist/
+.private-files/
+# Preserved local legacy data is excluded from releases and source control.
+supabase/
 coverage/
 playwright-report/
 test-results/

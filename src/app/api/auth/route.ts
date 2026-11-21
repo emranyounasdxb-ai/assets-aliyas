@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
-import { serverClient } from "@/lib/supabase/server";
+import { serverClient, login, logout } from "@/lib/server/database";
 import { apiError, AppError, requireOrigin } from "@/lib/server/context";
 import { boundedBody } from "@/lib/server/body";
 import { localDemoAllowed } from "@/lib/server/env";
@@ -14,9 +14,8 @@ export async function POST(request: Request) {
         password: z.string().max(200).optional(),
       })
       .parse(JSON.parse((await boundedBody(request, 8192)).toString()));
-    const db = await serverClient();
     if (body.action === "logout") {
-      await db.auth.signOut();
+      await logout();
       (await cookies()).delete("aliyas-workspace");
       return Response.json({ ok: true });
     }
@@ -33,30 +32,27 @@ export async function POST(request: Request) {
       body.action === "demo" ? process.env.DEMO_PASSWORD : body.password;
     if (!email || !password)
       throw new AppError("Enter your email and password");
-    const { data, error } = await db.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error || !data.user)
-      throw new AppError("Email or password is incorrect", 401);
+    const user = await login(email, password);
+    if (!user) throw new AppError("Email or password is incorrect", 401);
+    const authenticated = await serverClient();
     const { data: demoWorkspace } =
       body.action === "demo"
-        ? await db
+        ? await authenticated
             .from("workspaces")
             .select("id")
             .eq("is_demo", true)
             .limit(1)
             .maybeSingle()
         : { data: null };
-    let membershipQuery = db
+    let membershipQuery = authenticated
       .from("memberships")
       .select("workspace_id")
-      .eq("user_id", data.user.id);
+      .eq("user_id", user.id);
     if (demoWorkspace)
       membershipQuery = membershipQuery.eq("workspace_id", demoWorkspace.id);
     const { data: member } = await membershipQuery.limit(1).maybeSingle();
     if (!member) {
-      await db.auth.signOut();
+      await logout();
       throw new AppError("This account has no workspace assigned", 403);
     }
     (await cookies()).set("aliyas-workspace", member.workspace_id, {

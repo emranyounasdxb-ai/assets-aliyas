@@ -100,16 +100,25 @@ describe("Local preview and reminders", () => {
   it("allows explicit demo mode only with local request, app and backend", () => {
     vi.stubEnv("LOCAL_DEMO", "true");
     vi.stubEnv("APP_ORIGIN", "http://127.0.0.1:3200");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:56321");
+    vi.stubEnv(
+      "DATABASE_URL",
+      "mysql://local:local@127.0.0.1:56332/aliyas_assets",
+    );
     expect(localDemoAllowed("127.0.0.1:3200")).toBe(true);
     expect(localDemoAllowed("example.test")).toBe(false);
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv(
+      "DATABASE_URL",
+      "mysql://local:local@remote.example.test/aliyas_assets",
+    );
     expect(localDemoAllowed("127.0.0.1:3200")).toBe(false);
   });
   it("does not enable a demo on an externally configured application", () => {
     vi.stubEnv("LOCAL_DEMO", "true");
     vi.stubEnv("APP_ORIGIN", "https://assets.example.test");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:56321");
+    vi.stubEnv(
+      "DATABASE_URL",
+      "mysql://local:local@127.0.0.1:56332/aliyas_assets",
+    );
     expect(localDemoAllowed("127.0.0.1:3200")).toBe(false);
   });
 });

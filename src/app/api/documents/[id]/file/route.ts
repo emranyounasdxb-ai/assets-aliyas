@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { adminClient } from "@/lib/supabase/server";
+import { privateFile } from "../../../../../../database/storage.mjs";
 import { apiError, AppError, getContext } from "@/lib/server/context";
 export async function GET(
   request: Request,
@@ -20,22 +20,18 @@ export async function GET(
     const thumbnail = url.searchParams.get("preview") === "1";
     const path =
       thumbnail && doc.thumbnail_path ? doc.thumbnail_path : doc.storage_path;
-    const { data, error } = await adminClient()
-      .storage.from("aliyas-private")
-      .createSignedUrl(path, 60, {
-        download: url.searchParams.get("download") === "1" ? doc.name : false,
-      });
-    if (error || !data)
-      throw new AppError(
-        "This file is temporarily unavailable. Please try again.",
-        503,
-      );
-    return new Response(null, {
-      status: 302,
+    const data = await privateFile(path);
+    const download = url.searchParams.get("download") === "1";
+    return new Response(data, {
+      status: 200,
       headers: {
-        Location: data.signedUrl,
+        "Content-Type": thumbnail ? "image/webp" : doc.mime,
+        "Content-Length": String(data.length),
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
         "Cache-Control": "private, no-store",
         "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'",
       },
     });
   } catch (error) {

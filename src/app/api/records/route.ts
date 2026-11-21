@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { adminClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/server/database";
 import {
   apiError,
   AppError,

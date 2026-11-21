@@ -47,10 +47,8 @@ assert.equal(
 const { z } = await import("zod");
 assert.equal(z.string().parse("ready"), "ready");
 
-const supabase = await import("@supabase/supabase-js");
-const ssr = await import("@supabase/ssr");
-assert.equal(typeof supabase.createClient, "function");
-assert.equal(typeof ssr.createServerClient, "function");
+const mysql = await import("mysql2/promise");
+assert.equal(typeof mysql.createPool, "function");
 await import("@tailwindcss/postcss");
 
 const { default: sharp } = await import("sharp");
@@ -68,7 +66,7 @@ const previewMetadata = await sharp(preview).metadata();
 assert.equal(previewMetadata.format, "webp");
 assert.equal(previewMetadata.width, 2);
 console.log(
-  "React rendering, validation, backend SDKs and native images: passed",
+  "React rendering, validation, MariaDB client and native images: passed",
 );
 
 const generatorRequire = createRequire(

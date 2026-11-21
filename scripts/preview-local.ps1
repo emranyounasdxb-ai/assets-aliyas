@@ -19,18 +19,10 @@ try {
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
         throw "Port $Port is used by another application. Choose a different port."
     }
-    & "$PSScriptRoot\pnpm.ps1" db:start *> '.tools\supabase-start.log'
-    if ($LASTEXITCODE -ne 0) { throw 'The local database could not start. See .tools/supabase-start.log.' }
-    docker compose -f compose.services.yaml up -d
-    if ($LASTEXITCODE -ne 0) { throw 'The local file scanner could not start.' }
-    & "$PSScriptRoot\pnpm.ps1" exec supabase migration up *> '.tools\migration.log'
+    & "$PSScriptRoot\pnpm.ps1" db:start *> '.tools\backend-start.log'
+    if ($LASTEXITCODE -ne 0) { throw 'The local database could not start. See .tools/backend-start.log.' }
+    & "$PSScriptRoot\pnpm.ps1" exec node --env-file=.env.local scripts/migrate.mjs *> '.tools\migration.log'
     if ($LASTEXITCODE -ne 0) { throw 'The database migration could not finish.' }
-    if (-not (Test-Path -LiteralPath '.env.local')) {
-        $statusJson = & "$PSScriptRoot\pnpm.ps1" exec supabase status -o json 2> '.tools\supabase-status.stderr.log'
-        if ($LASTEXITCODE -ne 0) { throw 'Could not read local backend configuration.' }
-        $localConfig = ($statusJson -join "`n") | ConvertFrom-Json
-        @("NEXT_PUBLIC_SUPABASE_URL=$($localConfig.API_URL)", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$($localConfig.PUBLISHABLE_KEY)", "SUPABASE_SECRET_KEY=$($localConfig.SECRET_KEY)") | Set-Content -LiteralPath '.env.local' -Encoding utf8
-    }
     & "$PSScriptRoot\pnpm.ps1" exec node --env-file=.env.local scripts/bootstrap-demo.mjs
     if ($LASTEXITCODE -ne 0) { throw 'The local preview account could not be prepared.' }
     & "$PSScriptRoot\pnpm.ps1" build

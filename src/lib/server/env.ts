@@ -5,7 +5,7 @@ export function requiredEnv(name: string): string {
 }
 export function localDemoAllowed(host: string | null): boolean {
   if (process.env.LOCAL_DEMO !== "true" || !host) return false;
-  const backend = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const backend = process.env.DATABASE_URL;
   const frontend = process.env.APP_ORIGIN;
   if (!backend || !frontend) return false;
   try {

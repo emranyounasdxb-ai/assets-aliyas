@@ -1,13 +1,13 @@
 # Local Application and Operating Rules
 
-The first working version uses Next.js, Supabase PostgreSQL, authentication, private file storage and a local ClamAV scanner. It is an internal staff application in English, with AED amounts and Asia/Dubai business dates. Conversation with the user remains in Roman Hinglish.
+The first working version uses Next.js, the server's existing MariaDB/MySQL, application authentication, private server folders and a ClamAV scanner. It is an internal staff application in English, with AED amounts and Asia/Dubai business dates. Conversation with the user remains in Roman Hinglish.
 
 ## Running locally
 
 ```powershell
 .\scripts\pnpm.ps1 db:start
 docker compose -f compose.services.yaml up -d
-.\scripts\pnpm.ps1 exec supabase migration up
+.\scripts\pnpm.ps1 db:migrate
 .\scripts\pnpm.ps1 exec node --env-file=.env.local scripts/bootstrap-demo.mjs
 .\scripts\pnpm.ps1 dev --port 3200
 ```
@@ -58,9 +58,9 @@ These conventions make the application reviewable while the remaining business q
 
 ## Reminders
 
-A PostgreSQL Cron job runs at 04:00 UTC daily, equivalent to 08:00 in Dubai. It creates reminders for pending rental cheques due within seven days and for overdue cheques. Agreement creation and cheque status changes also generate reminders. Reminder records are unique per cheque and type; read status is personal to each staff user. Finalized cheques are filtered out of the attention list.
+Configure the package's reminders script through cPanel Cron at 04:00 UTC daily, equivalent to 08:00 in Dubai. It creates reminders for pending rental cheques due within seven days and for overdue cheques. Agreement creation and cheque status changes also generate reminders. Reminder records are unique per cheque and type; read status is personal to each staff user. Finalized cheques are filtered out of the attention list.
 
-The database job runs independently of the browser. Visible tabs check live records every 15 seconds and on returning online or returning to the tab. Successful edits refresh the data immediately; other tabs on the same origin are notified to fetch a fresh snapshot. Updates use an authenticated, private, uncached JSON response and preserve filters, keyboard focus and unsaved form values. Failed background requests leave the current screen visible and retry on the next update. Workspace, account or role changes reset private client state. A cheque appears once in the attention list, with an overdue reminder taking priority over its earlier due reminder. External email, WhatsApp and push delivery are not configured; notifications appear in the application.
+The configured server cron runs independently of the browser. Loading a workspace also refreshes reminder records. Visible tabs check live records every 15 seconds and on returning online or returning to the tab. Successful edits refresh the data immediately; other tabs on the same origin are notified to fetch a fresh snapshot. Updates use an authenticated, private, uncached JSON response and preserve filters, keyboard focus and unsaved form values. Failed background requests leave the current screen visible and retry on the next update. Workspace, account or role changes reset private client state. A cheque appears once in the attention list, with an overdue reminder taking priority over its earlier due reminder. External email, WhatsApp and push delivery are not configured; notifications appear in the application.
 
 Filter result regions retain their measured height as rows are narrowed, and table column proportions remain fixed while filtering. Space is recalculated for a changed viewport and released for printing. This keeps subsequent panels and the page width stable without adding fictitious rows or hiding filtered data. Initial page navigation still has a loading state; filtering and background data updates do not replace the page with it.
 
@@ -68,13 +68,13 @@ Filter result regions retain their measured height as rows are narrowed, and tab
 
 - Accept PDF, JPEG, PNG and WebP up to 20 MB. Validate actual file signatures and image decoding; image pixel count is limited.
 - Scan originals with ClamAV before storing them. Scanner unavailability fails closed with a retry message.
-- Store files and generated WebP previews in a private bucket. Originals keep their original bytes; a SHA256 digest is recorded.
-- Direct authenticated storage access is not granted. The server authenticates the request and checks record-level permissions before issuing a file link valid for 60 seconds.
+- Store files and generated WebP previews in a private server directory outside all web document roots. Originals keep their original bytes; a SHA256 digest is recorded.
+- Files have no public storage URL. Each preview or download authenticates the server session and checks record permissions before returning private, uncached bytes.
 - Tenant identity documents and contracts are restricted to owners, managers and accountants. Viewers can read property photos and floor plans, but cannot access private tenant files or mutate records.
 - Replacement creates a new version. Previous versions remain downloadable to permitted users.
 - Upload request keys prevent a retry from creating a second committed attachment. Failed metadata writes trigger storage cleanup.
-- Enforce workspace isolation in PostgreSQL row-level security and composite foreign keys. A document URL or UUID alone does not grant access.
-- Authentication cookies are HTTP-only. Write routes check the browser origin. The development application, scanner and backend bind to loopback.
+- Enforce workspace isolation in server-scoped membership queries, transaction permissions and composite foreign keys. Workspace locks serialize financial and reservation changes across server processes. A document URL or UUID alone does not grant access.
+- Passwords use salted scrypt hashes. Authentication uses revocable, hashed server sessions with HTTP-only cookies, a 30-minute idle timeout and a 12-hour absolute expiry. Password guessing is limited through persistent database records. Write routes check the browser origin. The development application, scanner and backend bind to loopback.
 
 ## Backups
 
@@ -83,13 +83,13 @@ Filter result regions retain their measured height as rows are narrowed, and tab
 .\scripts\pnpm.ps1 exec node --env-file=.env.local scripts/backup-local.mjs --verify backups/<backup-directory>
 ```
 
-The backup command streams the database archive and private storage archive directly into AES-256-GCM encrypted files under ignored `backups/`. It generates a backup key in ignored `.env.local` on first use. Keep that key separately; encrypted backups cannot be recovered without it. Verification decrypts and authenticates both archives and checks their archive listings without modifying the live database. A full disaster-recovery drill and scheduled off-device backups remain deployment work.
+The backup command writes a consistent MariaDB table snapshot and streams the private storage archive directly into AES-256-GCM encrypted files under ignored `backups/`. It generates a backup key in ignored `.env.local` on first use. Keep that key separately; encrypted backups cannot be recovered without it. Verification decrypts and authenticates both archives and checks their table counts and file archive listing without modifying the live database. A full disaster-recovery drill and scheduled off-device backups remain deployment work.
 
 ## Validation and production work
 
 The automated tests use isolated verification workspaces and fictional records. They cover tenant and property forms, agreement overlap, exact installments, payment idempotency, security separation, private file upload and replacement, cross-workspace and viewer access, CSV export, mobile layout, keyboard focus and reduced motion.
 
-Before production: confirm wallet and settlement rules; approve the official tenancy template; configure staff onboarding, hosted Supabase and its region, HTTPS, scanner hosting, monitoring, retention, automatic off-device backups and a verified restoration procedure. Decide external reminder channels and provider accounts. Do not use the local demo account as a production staff account.
+Before production: confirm wallet and settlement rules; approve the official tenancy template; configure staff onboarding, private credentials for the separate assets MariaDB database, a compatible Node runtime, private scanner access, monitoring, retention, automatic off-device backups and a verified restoration procedure. Decide external reminder channels and provider accounts. Do not use the local demo account as a production staff account.
 
 ## Brand and paid parking update
 

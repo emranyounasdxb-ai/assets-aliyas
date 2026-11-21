@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
-import { createClient } from "@supabase/supabase-js";
+import { adminDatabase, DatabaseClient } from "../database/client.mjs";
+import { closeDatabase } from "../database/sql.mjs";
 
-const backend = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const backend = process.env.DATABASE_URL;
 assert.ok(
   backend && ["127.0.0.1", "localhost"].includes(new URL(backend).hostname),
   "Demo bootstrap is restricted to a local backend",
 );
-const admin = createClient(backend, process.env.SUPABASE_SECRET_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const admin = adminDatabase();
 const email = process.env.DEMO_EMAIL ?? "portfolio-demo@aliyas.example.test";
 const password =
   process.env.DEMO_PASSWORD ?? randomBytes(30).toString("base64url");
@@ -69,11 +68,7 @@ await checked(
     display_name: "Emran Younas",
   }),
 );
-const client = createClient(
-  backend,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } },
-);
+const client = new DatabaseClient();
 const { error: loginError } = await client.auth.signInWithPassword({
   email,
   password,
@@ -278,3 +273,4 @@ for (let b = 0; b < properties.length; b++) {
 console.log(
   `Demo portfolio ready: ${properties.length} fictional buildings and ${tenantIndex} fictional tenants. Credentials saved only in ignored .env.local.`,
 );
+await closeDatabase();

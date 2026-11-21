@@ -20,8 +20,6 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_SUPABASE_URL: https://ci-build.example.test
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture_only
       APP_ORIGIN: https://assets.aliyasrealestate.ae
       ALIYAS_STANDALONE: "true"
     steps:
@@ -45,6 +43,12 @@ jobs:
         run: |
           pnpm exec node scripts/package-cpanel.mjs --verification
           pnpm exec node scripts/smoke-cpanel.mjs
+      - name: Select the hosting server's existing Node LTS
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.3
+      - name: Verify startup on the hosting Node version
+        run: node scripts/smoke-cpanel.mjs
 
   integration:
     name: Integration
@@ -69,13 +73,13 @@ jobs:
       - name: Start the disposable backend and scanner
         run: |
           mkdir -p .tools
-          pnpm db:start > .tools/backend-start.log 2>&1
-          docker compose -f compose.services.yaml -f compose.ci.yaml up -d
           pnpm exec node scripts/prepare-ci-env.mjs
+          docker compose --env-file .env.local -f compose.services.yaml -f compose.ci.yaml up -d --wait database
+          docker compose --env-file .env.local -f compose.services.yaml -f compose.ci.yaml up -d scanner
           pnpm exec node scripts/wait-for-service.mjs scanner
       - name: Prepare test data and build
         run: |
-          pnpm exec supabase migration up
+          pnpm exec node --env-file=.env.local scripts/migrate.mjs
           pnpm exec node --env-file=.env.local scripts/bootstrap-demo.mjs
           pnpm build
       - name: Start the optimized app
@@ -86,5 +90,4 @@ jobs:
       - name: Stop disposable services
         if: always()
         run: |
-          docker compose -f compose.services.yaml -f compose.ci.yaml down
-          pnpm exec supabase stop --no-backup
+          docker compose --env-file .env.local -f compose.services.yaml -f compose.ci.yaml down

@@ -6,7 +6,7 @@
   "description": "Property and rental management for the company's Ajman buildings",
   "packageManager": "pnpm@12.21.0",
   "engines": {
-    "node": ">=26.13.1 <27",
+    "node": ">=24.22.3 <25 || >=26.13.1 <27",
     "pnpm": "12.21.0"
   },
   "scripts": {
@@ -18,8 +18,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:start": "node scripts/start-backend.mjs",
-    "db:stop": "supabase stop",
-    "db:status": "supabase status",
+    "db:stop": "docker compose --env-file .env.local -f compose.services.yaml stop",
+    "db:status": "docker compose --env-file .env.local -f compose.services.yaml ps",
+    "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "tools:verify": "node scripts/verify-tools.mjs",
     "test": "vitest",
     "test:run": "vitest run",
@@ -29,11 +30,10 @@
   "dependencies": {
     "@hookform/resolvers": "7.0.8",
     "@phosphor-icons/react": "2.1.10",
-    "@supabase/ssr": "0.12.7",
-    "@supabase/supabase-js": "2.119.2",
     "@tanstack/react-table": "9.3.1",
     "date-fns": "4.4.0",
     "geist": "1.9.2",
+    "mysql2": "3.24.6",
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -52,7 +52,6 @@
     "prettier": "3.10.1",
     "prettier-plugin-tailwindcss": "0.8.1",
     "shadcn": "4.23.0",
-    "supabase": "3.2.0",
     "tailwindcss": "4.3.5",
     "typescript": "7.0.2",
     "vite": "8.3.8",

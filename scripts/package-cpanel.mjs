@@ -32,7 +32,7 @@ assert.ok(
 const root = process.cwd();
 const destination = path.resolve(root, "dist/cpanel");
 assert.ok(destination.startsWith(path.resolve(root, "dist") + path.sep));
-const { origin, backend, key } = deploymentSettings(verificationOnly);
+const { origin } = deploymentSettings(verificationOnly);
 await readFile(".next/standalone/server.js");
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
@@ -50,6 +50,22 @@ await cp(".next/static", path.join(destination, ".next/static"), {
 });
 await cp("deploy/cpanel/app.cjs", path.join(destination, "app.cjs"));
 await cp(
+  "deploy/cpanel/assets.htaccess.example",
+  path.join(destination, "assets.htaccess.example"),
+);
+await cp("database", path.join(destination, "database"), { recursive: true });
+await mkdir(path.join(destination, "scripts"), { recursive: true });
+for (const script of [
+  "migrate.mjs",
+  "create-admin.mjs",
+  "seed-portfolio.mjs",
+  "reminders.mjs",
+])
+  await cp(
+    path.join("scripts", script),
+    path.join(destination, "scripts", script),
+  );
+await cp(
   "deploy/cpanel/.env.production.example",
   path.join(destination, ".env.production.example"),
 );
@@ -63,15 +79,15 @@ const manifest = {
   platform: "linux-x64",
   verificationOnly,
   appOrigin: origin.origin,
-  supabaseUrl: backend.href.replace(/\/$/, ""),
-  publishableKeyHash: createHash("sha256").update(key).digest("hex"),
+  databaseEngine: "MariaDB 10.11 / MySQL 8",
 };
 await writeFile(
   path.join(destination, "deploy-manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
 const secrets = [
-  process.env.SUPABASE_SECRET_KEY,
+  process.env.DATABASE_URL,
+  process.env.MARIADB_ROOT_PASSWORD,
   process.env.DEMO_PASSWORD,
   process.env.BACKUP_ENCRYPTION_KEY,
   process.env.GH_TOKEN,
