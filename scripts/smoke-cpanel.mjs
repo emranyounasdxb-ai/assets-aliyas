@@ -1,20 +1,36 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as pause } from "node:timers/promises";
 
-const directory = path.resolve("dist/cpanel");
+// Run outside the checkout so missing dependencies cannot resolve from the
+// development node_modules and hide an incomplete deployment package.
+const isolated = await mkdtemp(path.join(tmpdir(), "aliyas-cpanel-"));
+const directory = path.join(isolated, "current");
+await cp(path.resolve("dist/cpanel"), directory, {
+  recursive: true,
+  dereference: false,
+  verbatimSymlinks: true,
+});
 const manifest = JSON.parse(
   await readFile(path.join(directory, "deploy-manifest.json"), "utf8"),
 );
 assert.ok(manifest.verificationOnly && process.env.GITHUB_ACTIONS === "true");
-const child = spawn(process.execPath, ["app.cjs"], {
-  cwd: directory,
+const launcher = path.join(isolated, "launcher");
+await mkdir(launcher);
+await cp(path.join(directory, "launcher.cjs"), path.join(launcher, "app.js"));
+await writeFile(path.join(launcher, "package.json"), '{"type":"commonjs"}');
+const environment = path.join(isolated, "runtime.env");
+await writeFile(environment, "NODE_ENV=production\n", { mode: 0o600 });
+const child = spawn(process.execPath, ["app.js"], {
+  cwd: launcher,
   env: {
     ...process.env,
+    ALIYAS_ENV_FILE: environment,
     HOSTNAME: "127.0.0.1",
     PORT: "3210",
     DATABASE_URL: "mysql://ci:ci@127.0.0.1:56332/ci_verification",
@@ -73,4 +89,9 @@ try {
   );
 } finally {
   child.kill("SIGTERM");
+  await new Promise((resolve) => {
+    if (child.exitCode !== null) resolve();
+    else child.once("exit", resolve);
+  });
+  await rm(isolated, { recursive: true, force: true });
 }

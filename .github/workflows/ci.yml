@@ -83,6 +83,7 @@ jobs:
       - name: Prepare test data and build
         run: |
           pnpm exec node --env-file=.env.local scripts/migrate.mjs
+          pnpm exec node --env-file=.env.local scripts/verify-owner-setup.mjs
           pnpm exec node --env-file=.env.local scripts/bootstrap-demo.mjs
           pnpm build
       - name: Start the optimized app
