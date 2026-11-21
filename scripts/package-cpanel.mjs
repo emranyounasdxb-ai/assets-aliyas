@@ -45,6 +45,11 @@ await cp(".next/standalone", destination, {
   filter: (source) => !path.basename(source).startsWith(".env"),
 });
 await cp("public", path.join(destination, "public"), { recursive: true });
+// Next optimizes date-fns into its server bundle. Maintenance scripts also use
+// the unbundled package, so include its self-contained, pinned distribution.
+const dates = path.join(destination, "node_modules/date-fns");
+await rm(dates, { recursive: true, force: true });
+await cp(await realpath("node_modules/date-fns"), dates, { recursive: true });
 await cp(".next/static", path.join(destination, ".next/static"), {
   recursive: true,
 });

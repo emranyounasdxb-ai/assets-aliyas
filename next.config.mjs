@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const config = {
   output: process.env.ALIYAS_STANDALONE === "true" ? "standalone" : undefined,
-  serverExternalPackages: ["mysql2", "date-fns"],
+  serverExternalPackages: ["mysql2"],
   poweredByHeader: false,
   devIndicators: false,
   agentRules: false,
