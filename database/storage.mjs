@@ -13,15 +13,14 @@ function root() {
   if (!directory || !path.isAbsolute(directory))
     throw new Error("Configure an absolute private storage directory");
   const resolved = path.resolve(directory);
-  const forbidden = [
-    path.resolve("public"),
-    path.resolve("/home/aliyasrealestate/assets.aliyasrealestate.ae"),
-  ];
   if (
-    resolved.split(path.sep).includes("public_html") ||
-    forbidden.some(
-      (base) => resolved === base || resolved.startsWith(base + path.sep),
-    )
+    resolved
+      .split(/[\\/]/)
+      .some((segment) =>
+        ["public", "public_html", "assets.aliyasrealestate.ae"].includes(
+          segment,
+        ),
+      )
   )
     throw new Error("Private storage must be outside web document roots");
   return resolved;
