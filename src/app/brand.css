@@ -1772,6 +1772,71 @@ body {
   line-height: 24px;
   margin-bottom: 16px;
 }
+.reports-export-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.parking-report-section {
+  margin-top: 24px;
+}
+.parking-report-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 24px 24px;
+}
+.parking-report-summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: 8px;
+}
+.parking-report-summary strong {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+.parking-report-tabs,
+.parking-reservation-toolbar {
+  padding: 0 24px 16px;
+}
+.parking-reservation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.property-parking-cell {
+  min-width: 160px;
+}
+@media print {
+  .reports-page th,
+  .reports-page td {
+    padding: 8px;
+    white-space: normal;
+  }
+  .reports-page .property-parking-cell {
+    min-width: 0;
+  }
+}
+@media (max-width: 1200px) {
+  .reports-export-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .reports-export-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .parking-report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0 16px 24px;
+  }
+  .parking-report-tabs,
+  .parking-reservation-toolbar {
+    padding: 0 16px 16px;
+  }
+}
 .main-content {
   padding-bottom: 32px;
 }

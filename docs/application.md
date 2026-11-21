@@ -33,6 +33,7 @@ Create an empty workspace from Settings to try entering a separate portfolio. A 
 - Separate refundable cash deposits and security cheque records, including return status.
 - Private document upload, preview, download and version replacement for properties, floors, flats, tenants and agreements.
 - Occupancy and collection reports, account balance exports, CSV downloads and browser printing.
+- Parking levels and lots in property performance, per-building parking availability, current/upcoming and historical reservations, and parking/reservation CSV exports. Annual booked parking charges remain separate from actual combined rental collections.
 - Workspace settings, role-based access and personal reminder read status.
 
 ## Financial conventions used in this version

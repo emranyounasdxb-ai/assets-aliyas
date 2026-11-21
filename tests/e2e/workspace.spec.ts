@@ -2,6 +2,7 @@ import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "node:crypto";
 import net from "node:net";
+import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import { todayDubai } from "../../src/lib/domain";
 const origin = "http://127.0.0.1:3200";
@@ -1151,12 +1152,15 @@ test.describe.serial("Property management workspace", () => {
       .getByLabel("Property", { exact: true })
       .selectOption(shopBuilding);
     await page.getByLabel("Rental type", { exact: true }).selectOption("Shop");
-    const reportRow = page.getByRole("row").filter({
-      has: page.getByRole("link", {
-        name: "Verification Shops",
-        exact: true,
-      }),
-    });
+    const reportRow = page
+      .getByRole("table", { name: "Property performance", exact: true })
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("link", {
+          name: "Verification Shops",
+          exact: true,
+        }),
+      });
     await expect(reportRow.locator("td").nth(1)).toHaveText("0");
     await expect(reportRow.locator("td").nth(2)).toHaveText("1");
     await expect(reportRow.locator("td").nth(4)).toHaveText("1");
@@ -1165,6 +1169,168 @@ test.describe.serial("Property management workspace", () => {
     await expect(reportRow.locator("td").nth(1)).toHaveText("1");
     await expect(reportRow.locator("td").nth(2)).toHaveText("0");
     await expect(reportRow.locator("td").last()).toContainText("0");
+  });
+  test("reports parking inventory, reservations and CSV records with the correct property scope", async () => {
+    const property = (
+      await checkedAction("building", {
+        name: "Verification Parking Report",
+        code: "QA-PARK-REPORT",
+        area: "Verification area",
+        floor_count: 0,
+      })
+    ).result;
+    const ground = (await readRows("floors")).find(
+      (f) => f.building_id === property && f.ordinal === 0,
+    );
+    await checkedAction("floor", {
+      building_id: property,
+      name: "P1",
+      ordinal: 1,
+      purpose: "parking",
+    });
+    const parkingFloor = (await readRows("floors")).find(
+      (f) => f.building_id === property && f.ordinal === 1,
+    );
+    for (const number of [
+      "REPORT-CURRENT",
+      "REPORT-FUTURE",
+      "REPORT-FREE",
+      "REPORT-BLOCKED",
+    ]) {
+      await checkedAction("parking_lot", {
+        building_id: property,
+        floor_id: parkingFloor.id,
+        number,
+        status: number.endsWith("BLOCKED") ? "blocked" : "available",
+        rate_amount: "111.11",
+        rate_period: "monthly",
+      });
+    }
+    const lots = (await readRows("parking_lots")).filter(
+      (l) => l.building_id === property,
+    );
+    await checkedAction("unit", {
+      building_id: property,
+      floor_id: ground.id,
+      code: "REPORT-FLAT",
+      category: "Studio",
+      monthly_rent: "750",
+    });
+    const flat = (await readRows("units")).find(
+      (u) => u.building_id === property,
+    );
+    const current = (
+      await checkedAction("lease", {
+        tenant_id: tenant,
+        unit_id: flat.id,
+        start_date: todayDubai(),
+        annual_rent: "9000",
+        installments: 4,
+        reference: "QA-REPORT-CURRENT",
+        parking_lot_ids: [lots.find((l) => l.number === "REPORT-CURRENT").id],
+      })
+    ).result;
+    const currentLease = (await readRows("leases")).find(
+      (l) => l.id === current,
+    );
+    const futureStart = new Date(
+      Date.parse(`${currentLease.end_date}T12:00:00Z`) + 86400000,
+    )
+      .toISOString()
+      .slice(0, 10);
+    await checkedAction("lease", {
+      tenant_id: tenant,
+      unit_id: flat.id,
+      start_date: futureStart,
+      annual_rent: "9000",
+      installments: 6,
+      reference: "QA-REPORT-FUTURE",
+      parking_lot_ids: [lots.find((l) => l.number === "REPORT-FUTURE").id],
+    });
+    await page.goto(`${origin}/reports`);
+    await page.getByLabel("Property", { exact: true }).selectOption(property);
+    const summary = page.getByRole("table", {
+      name: "Parking by property",
+      exact: true,
+    });
+    const row = summary.getByRole("row").filter({
+      has: page.getByRole("link", {
+        name: "Verification Parking Report",
+        exact: true,
+      }),
+    });
+    for (const [index, value] of ["1", "4", "1", "2", "1", "1"].entries())
+      await expect(row.locator("td").nth(index + 1)).toHaveText(value);
+    await expect(row.locator("td").last()).toContainText("1,333.32");
+    const performance = page.getByRole("table", {
+      name: "Property performance",
+      exact: true,
+    });
+    const performanceRow = performance.getByRole("row").filter({
+      has: page.getByRole("link", {
+        name: "Verification Parking Report",
+        exact: true,
+      }),
+    });
+    await expect(
+      performanceRow.locator(".property-parking-cell"),
+    ).toContainText("4 lots");
+    await expect(performanceRow.locator("td").last()).toContainText("AED 0");
+    await page.getByLabel("Rental type", { exact: true }).selectOption("Shop");
+    await expect(row.locator("td").nth(2)).toHaveText("4");
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Export parking", exact: true })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("aliyas-parking-report.csv");
+    const downloadPath = await download.path();
+    if (!downloadPath) throw new Error("Parking CSV was not saved");
+    const csv = await readFile(downloadPath, "utf8");
+    expect(csv.trim().split("\n")).toHaveLength(5);
+    expect(csv).toContain("REPORT-CURRENT");
+    expect(csv).toContain("REPORT-BLOCKED");
+    expect(csv).toContain('"1333.32"');
+    expect(csv).toContain("QA-REPORT-FUTURE");
+    await page.getByRole("tab", { name: "Reservations", exact: true }).click();
+    const reservations = page.getByRole("table", {
+      name: "Parking reservations",
+      exact: true,
+    });
+    await expect(reservations.getByRole("row")).toHaveCount(3);
+    await expect(
+      reservations.getByRole("link", { name: "QA-REPORT-FUTURE", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByLabel("Parking reservation status", { exact: true })
+      .selectOption("Upcoming");
+    await expect(reservations.getByRole("row")).toHaveCount(2);
+    const reservationsDownload = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Export reservations", exact: true })
+      .click();
+    const reservationPath = await (await reservationsDownload).path();
+    if (!reservationPath) throw new Error("Reservation CSV was not saved");
+    expect(
+      (await readFile(reservationPath, "utf8")).trim().split("\n"),
+    ).toHaveLength(2);
+    await page
+      .getByLabel("Parking reservation status", { exact: true })
+      .selectOption("Allocated");
+    await expect(
+      reservations.getByRole("link", {
+        name: "QA-REPORT-CURRENT",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "By property", exact: true }).click();
+    await page.getByLabel("Property", { exact: true }).selectOption(building);
+    await expect(
+      summary.getByRole("link", {
+        name: "Verification Parking Report",
+        exact: true,
+      }),
+    ).toHaveCount(0);
   });
   test("keeps the mobile layout, keyboard focus and reduced motion usable", async () => {
     await page.setViewportSize({ width: 390, height: 844 });

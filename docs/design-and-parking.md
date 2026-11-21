@@ -30,6 +30,16 @@ Parking can also be added or removed from an existing agreement while all its re
 
 Tenant profiles include a Parking tab. The Parking module lists current availability and allocation history; agreement pages expose their reservations. Owners and managers may mutate inventory and reservations. Database row-level security isolates each workspace.
 
+## Parking reports
+
+Reports include parking directly in Property performance and in a separate Parking report. Recorded parking levels are counted separately from numbered lots; AG 19's six parking levels never imply six parking spaces. Actual capacity appears only after the user registers lot numbers.
+
+Parking summaries show registered lots, allocated/available/blocked spaces today, and lots with future reservations. Future reservations do not remove a space from today's availability unless it is currently allocated. Multiple future contracts for the same lot count as one lot reserved ahead. Cancelled and expired allocations stay in reservation history but do not occupy spaces today.
+
+The property filter scopes all parking records and exports. Flat/shop filters and collection date ranges apply to the existing rental collections; parking inventory remains a separate asset view. The reservation report offers current/upcoming records and filtered history with tenant, agreement, dates and the original annual price snapshot. CSV exports include all filtered records, including those beyond the visible page.
+
+Annual parking charges in the summary are full contract values of current allocations. They are not inferred cash receipts or prorated revenue. Combined rent cheque payments remain in collections without inventing a rent/parking payment split. Browser printing includes the selected parking report view.
+
 ## Verification
 
 Tests cover annual price conversion, inclusive reservation boundaries, cancelled/blocked availability, property and floor editing, restricted service levels, multi-lot agreement creation, exact combined cheque totals, fixed price snapshots, retry idempotency, draft cancellation, issued-cheque locks, simultaneous double-allocation rejection, same-building enforcement, viewer restrictions, profile tabs, filters and mobile layouts.
