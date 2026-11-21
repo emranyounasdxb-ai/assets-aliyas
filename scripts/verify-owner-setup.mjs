@@ -12,7 +12,7 @@ assert.equal(
   (await one(pool, "select count(*) total from workspaces")).total,
   0,
 );
-const password = randomBytes(32).toString("base64url");
+const password = randomBytes(8).toString("base64url").slice(0, 10);
 console.log(`::add-mask::${password}`);
 async function runSetup(answers) {
   const child = spawn(
@@ -46,6 +46,18 @@ async function runSetup(answers) {
 let owner;
 let workspace;
 try {
+  const tooShort = await runSetup([
+    "CI setup fixture",
+    "ci-owner@aliyas.example.test",
+    password.slice(0, 9),
+  ]);
+  assert.notEqual(tooShort.code, 0);
+  assert.ok(tooShort.output.includes("Use a password of 10-200 characters"));
+  assert.ok(
+    !tooShort.output.includes(password.slice(0, 9)),
+    "The rejected password was echoed",
+  );
+  assert.equal((await one(pool, "select count(*) total from users")).total, 0);
   const result = await runSetup([
     "CI setup fixture",
     "ci-owner@aliyas.example.test",
