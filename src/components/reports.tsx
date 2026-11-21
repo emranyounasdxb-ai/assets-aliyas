@@ -20,6 +20,8 @@ import {
 import { parkingReport, parkingReservationStatus } from "@/lib/parking-report";
 import { useApp } from "./provider";
 import {
+  StableRegion,
+  StableTable,
   Badge,
   Button,
   Empty,
@@ -363,7 +365,7 @@ export function Reports() {
           </Button>
         </section>
       </div>
-      <section className="panel">
+      <StableRegion className="panel">
         <div className="panel-header">
           <SectionHeader
             title="Property performance"
@@ -373,7 +375,7 @@ export function Reports() {
           </SectionHeader>
         </div>
         <div className="table-wrap">
-          <table aria-label="Property performance">
+          <StableTable aria-label="Property performance">
             <thead>
               <tr>
                 <th>Property</th>
@@ -428,7 +430,7 @@ export function Reports() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StableTable>
         </div>
         <div className="report-note">
           Occupancy uses current agreement dates. Other includes reserved and
@@ -451,8 +453,8 @@ export function Reports() {
             </>
           )}
         </div>
-      </section>
-      <section className="panel parking-report-section">
+      </StableRegion>
+      <StableRegion className="panel parking-report-section">
         <div className="panel-header">
           <SectionHeader
             title="Parking report"
@@ -504,7 +506,7 @@ export function Reports() {
           hidden={parkingView !== "summary"}
         >
           <div className="table-wrap">
-            <table aria-label="Parking by property">
+            <StableTable aria-label="Parking by property">
               <thead>
                 <tr>
                   <th>Property</th>
@@ -541,7 +543,7 @@ export function Reports() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StableTable>
           </div>
         </div>
         <div
@@ -576,7 +578,7 @@ export function Reports() {
           {reservations.total ? (
             <>
               <div className="table-wrap">
-                <table aria-label="Parking reservations">
+                <StableTable aria-label="Parking reservations">
                   <thead>
                     <tr>
                       <th>Property / Parking</th>
@@ -637,7 +639,7 @@ export function Reports() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </StableTable>
               </div>
               <Pagination {...reservations} />
             </>
@@ -661,7 +663,7 @@ export function Reports() {
             </>
           )}
         </div>
-      </section>
+      </StableRegion>
     </div>
   );
 }

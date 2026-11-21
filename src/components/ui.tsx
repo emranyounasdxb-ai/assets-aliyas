@@ -4,6 +4,7 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -18,6 +19,119 @@ import {
   Plus,
   X,
 } from "@phosphor-icons/react";
+export function StableRegion({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const region = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const outer = region.current;
+    const inner = content.current;
+    if (!outer || !inner) return;
+    let width = 0;
+    let height = 0;
+    const measure = () => {
+      const nextWidth = outer.clientWidth;
+      if (!nextWidth) return;
+      if (Math.abs(nextWidth - width) > 1) {
+        width = nextWidth;
+        height = 0;
+      }
+      const style = getComputedStyle(outer);
+      const chrome = [
+        style.paddingTop,
+        style.paddingBottom,
+        style.borderTopWidth,
+        style.borderBottomWidth,
+      ].reduce((sum, value) => sum + (Number.parseFloat(value) || 0), 0);
+      const nextHeight = Math.max(
+        height,
+        inner.getBoundingClientRect().height + chrome,
+      );
+      if (height !== nextHeight) {
+        height = nextHeight;
+        outer.style.setProperty("--stable-region-height", `${height}px`);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={region} className={`stable-region ${className}`}>
+      <div ref={content} className="stable-region-content">
+        {children}
+      </div>
+    </div>
+  );
+}
+export function StableTable({
+  children,
+  className = "",
+  style,
+  ...props
+}: React.ComponentPropsWithoutRef<"table">) {
+  const table = useRef<HTMLTableElement>(null);
+  const [columns, setColumns] = useState<{ id: string; width: number }[]>([]);
+  useLayoutEffect(() => {
+    const element = table.current;
+    if (!element) return;
+    let measured = false;
+    const measure = () => {
+      if (measured) return;
+      const cells = element.tHead?.rows[0]?.cells;
+      const width = element.getBoundingClientRect().width;
+      if (!cells?.length || !width) return;
+      measured = true;
+      setColumns(
+        Array.from(cells, (cell, index) => ({
+          id: `${cell.textContent}-${index}`,
+          width: (cell.getBoundingClientRect().width / width) * 100,
+        })),
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const minimum =
+    columns.length >= 8
+      ? 1024
+      : columns.length >= 6
+        ? 760
+        : columns.length >= 4
+          ? 640
+          : 0;
+  return (
+    <table
+      {...props}
+      ref={table}
+      className={`stable-table ${className}`}
+      style={
+        {
+          ...style,
+          tableLayout: columns.length ? "fixed" : undefined,
+          "--stable-table-minimum": `${minimum}px`,
+        } as React.CSSProperties
+      }
+    >
+      {!!columns.length && (
+        <colgroup>
+          {columns.map((column) => (
+            <col key={column.id} style={{ width: `${column.width}%` }} />
+          ))}
+        </colgroup>
+      )}
+      {children}
+    </table>
+  );
+}
 export function Button({
   children,
   variant = "secondary",

@@ -21,6 +21,8 @@ import {
 } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
+  StableRegion,
+  StableTable,
   Avatar,
   Badge,
   Button,
@@ -194,7 +196,7 @@ export function Cheques({ initialFilter = "all" }: { initialFilter?: string }) {
           ))}
         </select>
       </div>
-      <div className="panel">
+      <StableRegion className="panel">
         {list.total ? (
           <>
             <ChequeTable cheques={list.visible} />
@@ -206,7 +208,7 @@ export function Cheques({ initialFilter = "all" }: { initialFilter?: string }) {
             description="Try another filter. Rent cheques are created with each annual agreement."
           />
         )}
-      </div>
+      </StableRegion>
     </>
   );
 }
@@ -217,7 +219,7 @@ export function ChequeTable({ cheques }: { cheques: Cheque[] }) {
   );
   return (
     <div className="table-wrap cheque-table-wrap">
-      <table className="cheque-table">
+      <StableTable className="cheque-table">
         <thead>
           <tr>
             <th>Cheque / Bank</th>
@@ -291,7 +293,7 @@ export function ChequeTable({ cheques }: { cheques: Cheque[] }) {
             );
           })}
         </tbody>
-      </table>
+      </StableTable>
     </div>
   );
 }
@@ -308,7 +310,7 @@ export function LedgerTable({ tenantId }: { tenantId?: string }) {
   return list.total ? (
     <>
       <div className="table-wrap">
-        <table>
+        <StableTable>
           <thead>
             <tr>
               <th>Date</th>
@@ -352,7 +354,7 @@ export function LedgerTable({ tenantId }: { tenantId?: string }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </StableTable>
       </div>
       <Pagination {...list} />
     </>
@@ -471,13 +473,13 @@ export function Wallets() {
           </>
         )}
       </div>
-      <div className="panel">
+      <StableRegion className="panel">
         {view === "ledger" ? (
           <LedgerTable />
         ) : list.total ? (
           <>
             <div className="table-wrap">
-              <table>
+              <StableTable>
                 <thead>
                   <tr>
                     <th>Tenant</th>
@@ -546,7 +548,7 @@ export function Wallets() {
                     );
                   })}
                 </tbody>
-              </table>
+              </StableTable>
             </div>
             <Pagination {...list} />
           </>
@@ -556,7 +558,7 @@ export function Wallets() {
             description="Try another search or add a tenant to open their account."
           />
         )}
-      </div>
+      </StableRegion>
     </>
   );
 }

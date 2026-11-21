@@ -13,6 +13,7 @@ import {
 } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
+  StableTable,
   Badge,
   Button,
   ErrorText,
@@ -260,7 +261,7 @@ export function ParkingAssignments({
       </div>
       {records.length ? (
         <div className="table-wrap">
-          <table>
+          <StableTable>
             <thead>
               <tr>
                 <th>Parking space</th>
@@ -353,7 +354,7 @@ export function ParkingAssignments({
                 );
               })}
             </tbody>
-          </table>
+          </StableTable>
         </div>
       ) : (
         <div className="parking-empty">

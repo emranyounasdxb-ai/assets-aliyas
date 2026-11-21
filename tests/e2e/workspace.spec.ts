@@ -496,6 +496,9 @@ test.describe.serial("Property management workspace", () => {
   }) => {
     const anonymous = await browser.newContext();
     expect(
+      (await anonymous.request.get(`${origin}/api/workspace`)).status(),
+    ).toBe(401);
+    expect(
       (
         await anonymous.request.get(
           `${origin}/api/documents/${documentId}/file`,
@@ -557,6 +560,17 @@ test.describe.serial("Property management workspace", () => {
         data: { action: "login", email, password },
       });
       expect(response.ok(), await response.text()).toBe(true);
+      const snapshotResponse = await other.request.get(
+        `${origin}/api/workspace`,
+      );
+      expect(snapshotResponse.ok()).toBe(true);
+      expect(snapshotResponse.headers()["cache-control"]).toContain("no-store");
+      const snapshot = await snapshotResponse.json();
+      expect(snapshot.workspace.id).toBe(memberWorkspace);
+      expect(
+        snapshot.documents.some((d: { id: string }) => d.id === documentId),
+      ).toBe(false);
+      if (role === "outsider") expect(snapshot.tenants).toHaveLength(0);
       expect(
         (
           await other.request.get(`${origin}/api/documents/${documentId}/file`)
@@ -1331,6 +1345,171 @@ test.describe.serial("Property management workspace", () => {
         exact: true,
       }),
     ).toHaveCount(0);
+  });
+  test("keeps filter results and table columns stable without navigating or clearing the page", async () => {
+    await page.setViewportSize({ width: 1366, height: 1000 });
+    async function height() {
+      return page
+        .locator("main")
+        .evaluate((el) => el.getBoundingClientRect().height);
+    }
+    for (const [route, placeholder] of [
+      ["properties", "Search properties…"],
+      ["units", "Search flats or properties…"],
+      ["shops", "Search shops or properties…"],
+      ["tenants", "Search tenants, email or phone…"],
+      ["cheques", "Search cheques, tenants or banks…"],
+      ["parking", "Search parking number or property…"],
+      ["wallets", "Search tenant accounts…"],
+      ["documents", "Search documents or owners…"],
+    ]) {
+      await page.goto(`${origin}/${route}`);
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll<HTMLElement>(".stable-region")].every(
+          (el) => el.style.getPropertyValue("--stable-region-height"),
+        ),
+      );
+      const before = await height();
+      await page
+        .getByPlaceholder(placeholder, { exact: true })
+        .fill("no-such-record-for-layout-verification");
+      await expect(
+        page.getByPlaceholder(placeholder, { exact: true }),
+      ).toHaveValue("no-such-record-for-layout-verification");
+      expect(Math.abs((await height()) - before), route).toBeLessThanOrEqual(1);
+      await page.getByPlaceholder(placeholder, { exact: true }).fill("");
+    }
+    await page.goto(`${origin}/reports`);
+    await expect(page.locator(".stable-table colgroup").first()).toBeAttached();
+    const before = await height();
+    const columns = await page
+      .getByRole("table", { name: "Property performance", exact: true })
+      .locator("th")
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+    const parkingY = await page
+      .locator(".parking-report-section")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    const heading = await page
+      .getByRole("heading", { name: "Reports", exact: true })
+      .elementHandle();
+    await page.getByLabel("Property", { exact: true }).focus();
+    await page.getByLabel("Property", { exact: true }).selectOption(building);
+    expect(Math.abs((await height()) - before)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (await page
+          .locator(".parking-report-section")
+          .evaluate((el) => el.getBoundingClientRect().top)) - parkingY,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      await page
+        .getByRole("table", { name: "Property performance", exact: true })
+        .locator("th")
+        .evaluateAll((els) =>
+          els.map((el) => el.getBoundingClientRect().width),
+        ),
+    ).toEqual(columns);
+    expect(await heading?.evaluate((el) => el.isConnected)).toBe(true);
+    await expect(page.getByLabel("Property", { exact: true })).toBeFocused();
+    await expect(
+      page.getByLabel("Loading workspace", { exact: true }),
+    ).toHaveCount(0);
+  });
+  test("updates live records in another tab while preserving filters and unsaved forms through a failed refresh", async () => {
+    const observer = await context.newPage();
+    const actor = await context.newPage();
+    const record = (await readRows("buildings")).find((b) => b.id === building);
+    try {
+      await observer.goto(`${origin}/reports`);
+      await observer
+        .getByLabel("Property", { exact: true })
+        .selectOption(building);
+      await observer
+        .getByLabel("Rental type", { exact: true })
+        .selectOption("Flat");
+      const heading = await observer
+        .getByRole("heading", { name: "Reports", exact: true })
+        .elementHandle();
+      async function rename(from: string, to: string) {
+        await actor.goto(`${origin}/properties`);
+        await actor
+          .getByRole("button", { name: `Edit ${from}`, exact: true })
+          .click();
+        await actor
+          .getByRole("dialog")
+          .getByLabel("Property name", { exact: true })
+          .fill(to);
+        await actor
+          .getByRole("dialog")
+          .getByRole("button", { name: "Save changes", exact: true })
+          .click();
+        await expect(actor.getByRole("dialog")).toHaveCount(0);
+      }
+      await rename(record.name, "Live test building");
+      await expect(
+        observer
+          .getByRole("table", { name: "Property performance", exact: true })
+          .getByRole("link", { name: "Live test building", exact: true }),
+      ).toBeVisible();
+      await expect(
+        observer.getByLabel("Property", { exact: true }),
+      ).toHaveValue(building);
+      await expect(
+        observer.getByLabel("Rental type", { exact: true }),
+      ).toHaveValue("Flat");
+      expect(await heading?.evaluate((el) => el.isConnected)).toBe(true);
+      await observer.goto(`${origin}/tenants`);
+      await observer
+        .getByRole("button", { name: "Add tenant", exact: true })
+        .click();
+      await observer
+        .getByRole("dialog")
+        .getByLabel("Full name", { exact: true })
+        .fill("Unsaved live draft");
+      const input = await observer
+        .getByRole("dialog")
+        .getByLabel("Full name", { exact: true })
+        .elementHandle();
+      await observer.route("**/api/workspace", (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Verification reconnect" }),
+        }),
+      );
+      const failed = observer.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/workspace") &&
+          response.status() === 503,
+      );
+      await rename("Live test building", "Live updated building");
+      await failed;
+      await expect(
+        observer.getByRole("dialog").getByLabel("Full name", { exact: true }),
+      ).toHaveValue("Unsaved live draft");
+      await observer.unroute("**/api/workspace");
+      const recovered = observer.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/workspace") &&
+          response.status() === 200,
+      );
+      await observer.evaluate(() => window.dispatchEvent(new Event("online")));
+      const snapshot = await (await recovered).json();
+      expect(
+        snapshot.buildings.find((b: { id: string }) => b.id === building).name,
+      ).toBe("Live updated building");
+      await expect(
+        observer.getByRole("dialog").getByLabel("Full name", { exact: true }),
+      ).toHaveValue("Unsaved live draft");
+      expect(await input?.evaluate((el) => el.isConnected)).toBe(true);
+      await expect(
+        observer.getByLabel("Loading workspace", { exact: true }),
+      ).toHaveCount(0);
+    } finally {
+      await observer.close();
+      await actor.close();
+    }
   });
   test("keeps the mobile layout, keyboard focus and reduced motion usable", async () => {
     await page.setViewportSize({ width: 390, height: 844 });

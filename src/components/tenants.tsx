@@ -11,6 +11,8 @@ import {
 import { accountBalance, dateLabel, todayDubai, unitLabel } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
+  StableRegion,
+  StableTable,
   Avatar,
   BackLink,
   Badge,
@@ -84,11 +86,11 @@ export function Tenants() {
         <span className="toolbar-spacer" />
         <span className="filter-label">{list.total} tenants</span>
       </div>
-      <div className="panel">
+      <StableRegion className="panel">
         {list.total ? (
           <>
             <div className="table-wrap">
-              <table>
+              <StableTable>
                 <thead>
                   <tr>
                     <th>Tenant</th>
@@ -174,7 +176,7 @@ export function Tenants() {
                     );
                   })}
                 </tbody>
-              </table>
+              </StableTable>
             </div>
             <Pagination {...list} />
           </>
@@ -188,7 +190,7 @@ export function Tenants() {
             }
           />
         )}
-      </div>
+      </StableRegion>
     </>
   );
 }
@@ -374,7 +376,7 @@ export function TenantDetail({ id }: { id: string }) {
               </div>
               {leases.length ? (
                 <div className="table-wrap">
-                  <table>
+                  <StableTable>
                     <thead>
                       <tr>
                         <th>Agreement</th>
@@ -423,7 +425,7 @@ export function TenantDetail({ id }: { id: string }) {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </StableTable>
                 </div>
               ) : (
                 <Empty

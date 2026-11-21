@@ -21,6 +21,44 @@ html body [hidden] {
 }
 body {
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+html {
+  scrollbar-gutter: stable;
+}
+.modal {
+  left: calc(100vw - 100%);
+}
+.stable-region {
+  min-width: 0;
+  min-block-size: max(320px, var(--stable-region-height, 0px));
+}
+.stable-region-content {
+  display: flow-root;
+  min-width: 0;
+}
+.stable-table {
+  min-inline-size: var(--stable-table-minimum, 0px);
+}
+.stable-table th {
+  white-space: normal;
+}
+.stable-table td {
+  overflow-wrap: anywhere;
+}
+.stable-table .money {
+  white-space: nowrap;
+}
+@media print {
+  html {
+    scrollbar-gutter: auto;
+  }
+  .stable-region {
+    min-block-size: 0;
+  }
+  .stable-table {
+    min-inline-size: 0;
+  }
 }
 :focus-visible {
   outline: 3px solid var(--brand-ink);

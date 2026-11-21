@@ -10,6 +10,8 @@ import {
   canAmendParking,
 } from "./parking-allocations";
 import {
+  StableRegion,
+  StableTable,
   Badge,
   Button,
   Empty,
@@ -117,11 +119,11 @@ export function Parking() {
         <span className="toolbar-spacer" />
         <span className="filter-label">{list.total} parking lots</span>
       </div>
-      <section className="panel">
+      <StableRegion className="panel">
         {list.total ? (
           <>
             <div className="table-wrap">
-              <table>
+              <StableTable>
                 <thead>
                   <tr>
                     <th>Parking lot</th>
@@ -246,7 +248,7 @@ export function Parking() {
                     );
                   })}
                 </tbody>
-              </table>
+              </StableTable>
             </div>
             <Pagination {...list} />
           </>
@@ -271,7 +273,7 @@ export function Parking() {
             )}
           </Empty>
         )}
-      </section>
+      </StableRegion>
       {edit !== undefined && (
         <ParkingLotForm lot={edit} onClose={() => setEdit(undefined)} />
       )}

@@ -1,6 +1,5 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowSquareOut,
   UploadSimple,
@@ -31,6 +30,7 @@ import {
   SearchInput,
   SectionHeader,
   useList,
+  StableRegion,
 } from "./ui";
 type Target = DocumentRecord["target_type"];
 function fileSize(size: number) {
@@ -49,8 +49,7 @@ export function UploadModal({
   replace?: DocumentRecord;
   onClose: () => void;
 }) {
-  const { data, notify } = useApp();
-  const router = useRouter();
+  const { data, notify, refresh } = useApp();
   const [type, setType] = useState<Target>(
     replace?.target_type ?? targetType ?? "tenant",
   );
@@ -111,8 +110,7 @@ export function UploadModal({
       if (e.lengthComputable)
         setProgress(Math.round((e.loaded / e.total) * 100));
     };
-    xhr.onload = () => {
-      setPending(false);
+    xhr.onload = async () => {
       let result: { error?: string } = {};
       try {
         result = JSON.parse(xhr.responseText);
@@ -123,9 +121,13 @@ export function UploadModal({
             ? "New document version saved. The original is preserved."
             : "Document scanned and saved privately.",
         );
-        router.refresh();
+        await refresh(true);
+        setPending(false);
         onClose();
-      } else setError(result.error ?? "Upload failed. Please try again.");
+      } else {
+        setPending(false);
+        setError(result.error ?? "Upload failed. Please try again.");
+      }
     };
     xhr.onerror = () => {
       setPending(false);
@@ -512,96 +514,98 @@ export function Documents() {
           {list.total} private files
         </span>
       </div>
-      {list.total ? (
-        <>
-          <div className="document-grid">
-            {list.visible.map((doc) => (
-              <article className="document-card" key={doc.id}>
-                <button
-                  type="button"
-                  className="document-preview full-width"
-                  style={{ border: 0 }}
-                  aria-label={`Preview ${doc.name}`}
-                  onClick={() => setPreview(doc)}
-                >
-                  {doc.mime.startsWith("image/") ? (
-                    <img
-                      src={`/api/documents/${doc.id}/file?preview=1`}
-                      alt={doc.name}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <FilePdf size={42} weight="duotone" />
-                  )}
-                  <span className="document-type">
-                    {doc.mime.startsWith("image/") ? "IMAGE" : "PDF"}
-                  </span>
-                </button>
-                <div className="document-card-body">
-                  <h3 title={doc.name}>{doc.name}</h3>
-                  <p>
-                    {owner(doc)} · {fileSize(doc.size)}
-                  </p>
-                  <p>
-                    {dateLabel(doc.created_at)} · v{doc.version}
-                  </p>
-                  <div className="document-actions">
-                    <Badge tone="mint">{doc.category}</Badge>
-                    <div>
-                      {["owner", "manager", "accountant"].includes(
-                        data.membership.role,
-                      ) && (
-                        <Button
-                          variant="ghost"
-                          className="icon-button"
-                          aria-label={`New version of ${doc.name}`}
-                          onClick={() => setReplace(doc)}
+      <StableRegion>
+        {list.total ? (
+          <>
+            <div className="document-grid">
+              {list.visible.map((doc) => (
+                <article className="document-card" key={doc.id}>
+                  <button
+                    type="button"
+                    className="document-preview full-width"
+                    style={{ border: 0 }}
+                    aria-label={`Preview ${doc.name}`}
+                    onClick={() => setPreview(doc)}
+                  >
+                    {doc.mime.startsWith("image/") ? (
+                      <img
+                        src={`/api/documents/${doc.id}/file?preview=1`}
+                        alt={doc.name}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <FilePdf size={42} weight="duotone" />
+                    )}
+                    <span className="document-type">
+                      {doc.mime.startsWith("image/") ? "IMAGE" : "PDF"}
+                    </span>
+                  </button>
+                  <div className="document-card-body">
+                    <h3 title={doc.name}>{doc.name}</h3>
+                    <p>
+                      {owner(doc)} · {fileSize(doc.size)}
+                    </p>
+                    <p>
+                      {dateLabel(doc.created_at)} · v{doc.version}
+                    </p>
+                    <div className="document-actions">
+                      <Badge tone="mint">{doc.category}</Badge>
+                      <div>
+                        {["owner", "manager", "accountant"].includes(
+                          data.membership.role,
+                        ) && (
+                          <Button
+                            variant="ghost"
+                            className="icon-button"
+                            aria-label={`New version of ${doc.name}`}
+                            onClick={() => setReplace(doc)}
+                          >
+                            <ClockCounterClockwise size={16} />
+                          </Button>
+                        )}
+                        <a
+                          className="button ghost icon-button"
+                          aria-label={`Download ${doc.name}`}
+                          href={`/api/documents/${doc.id}/file?download=1`}
+                          target="_blank"
+                          rel="noreferrer"
                         >
-                          <ClockCounterClockwise size={16} />
-                        </Button>
-                      )}
-                      <a
-                        className="button ghost icon-button"
-                        aria-label={`Download ${doc.name}`}
-                        href={`/api/documents/${doc.id}/file?download=1`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <DownloadSimple size={16} />
-                      </a>
+                          <DownloadSimple size={16} />
+                        </a>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              ))}
+            </div>
+            <Pagination {...list} pageSize={12} />
+          </>
+        ) : (
+          <div className="panel">
+            <Empty
+              title={
+                data.documents.length
+                  ? "No matching files"
+                  : "Your documents belong here"
+              }
+              description={
+                data.documents.length
+                  ? "Try another name or category."
+                  : "Upload a property photo, a floor plan, a tenant document or a signed agreement. Originals stay private."
+              }
+            >
+              {["owner", "manager", "accountant"].includes(
+                data.membership.role,
+              ) && (
+                <Button onClick={() => setUpload(true)}>
+                  <UploadSimple size={16} />
+                  Upload your first document
+                </Button>
+              )}
+            </Empty>
           </div>
-          <Pagination {...list} pageSize={12} />
-        </>
-      ) : (
-        <div className="panel">
-          <Empty
-            title={
-              data.documents.length
-                ? "No matching files"
-                : "Your documents belong here"
-            }
-            description={
-              data.documents.length
-                ? "Try another name or category."
-                : "Upload a property photo, a floor plan, a tenant document or a signed agreement. Originals stay private."
-            }
-          >
-            {["owner", "manager", "accountant"].includes(
-              data.membership.role,
-            ) && (
-              <Button onClick={() => setUpload(true)}>
-                <UploadSimple size={16} />
-                Upload your first document
-              </Button>
-            )}
-          </Empty>
-        </div>
-      )}
+        )}
+      </StableRegion>
       {upload && <UploadModal onClose={() => setUpload(false)} />}{" "}
       {preview && (
         <PreviewModal doc={preview} onClose={() => setPreview(null)} />

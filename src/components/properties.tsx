@@ -24,6 +24,8 @@ import {
 } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
+  StableRegion,
+  StableTable,
   BackLink,
   Badge,
   Button,
@@ -237,36 +239,41 @@ export function Properties() {
           </button>
         </span>
       </div>
-      {properties.length ? (
-        <div
-          className={`property-grid ${view === "list" ? "property-list-view" : ""}`}
-        >
-          {properties.map((b) => (
-            <PropertyCard key={b.id} building={b} />
-          ))}
-        </div>
-      ) : (
-        <div className="panel">
-          <Empty
-            title={
-              data.buildings.length ? "No properties found" : "No properties"
-            }
-            description={
-              data.buildings.length
-                ? "Try a different search or area."
-                : "Add your first property and its floors. You can add flats and real photos next."
-            }
+      <StableRegion>
+        {properties.length ? (
+          <div
+            className={`property-grid ${view === "list" ? "property-list-view" : ""}`}
           >
-            {!data.buildings.length &&
-              ["owner", "manager"].includes(data.membership.role) && (
-                <Button variant="primary" onClick={() => openForm("building")}>
-                  <Plus size={16} />
-                  Add your first property
-                </Button>
-              )}
-          </Empty>
-        </div>
-      )}
+            {properties.map((b) => (
+              <PropertyCard key={b.id} building={b} />
+            ))}
+          </div>
+        ) : (
+          <div className="panel">
+            <Empty
+              title={
+                data.buildings.length ? "No properties found" : "No properties"
+              }
+              description={
+                data.buildings.length
+                  ? "Try a different search or area."
+                  : "Add your first property and its floors. You can add flats and real photos next."
+              }
+            >
+              {!data.buildings.length &&
+                ["owner", "manager"].includes(data.membership.role) && (
+                  <Button
+                    variant="primary"
+                    onClick={() => openForm("building")}
+                  >
+                    <Plus size={16} />
+                    Add your first property
+                  </Button>
+                )}
+            </Empty>
+          </div>
+        )}
+      </StableRegion>
     </>
   );
 }
@@ -667,7 +674,7 @@ export function UnitModal({
         <section className="unit-rental-history">
           <h3>Rental history</h3>
           <div className="table-wrap">
-            <table>
+            <StableTable>
               <thead>
                 <tr>
                   <th>Agreement / tenant</th>
@@ -705,7 +712,7 @@ export function UnitModal({
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </StableTable>
           </div>
         </section>
       )}
@@ -840,11 +847,11 @@ export function Units({
           ))}
         </select>
       </div>
-      <div className="panel">
+      <StableRegion className="panel">
         {list.total ? (
           <>
             <div className="table-wrap">
-              <table>
+              <StableTable>
                 <thead>
                   <tr>
                     <th>{label}</th>
@@ -923,7 +930,7 @@ export function Units({
                     );
                   })}
                 </tbody>
-              </table>
+              </StableTable>
             </div>
             <Pagination {...list} />
           </>
@@ -939,7 +946,7 @@ export function Units({
             }
           />
         )}
-      </div>
+      </StableRegion>
       {selected && (
         <UnitModal id={selected} onClose={() => setSelected(null)} />
       )}

@@ -60,7 +60,9 @@ These conventions make the application reviewable while the remaining business q
 
 A PostgreSQL Cron job runs at 04:00 UTC daily, equivalent to 08:00 in Dubai. It creates reminders for pending rental cheques due within seven days and for overdue cheques. Agreement creation and cheque status changes also generate reminders. Reminder records are unique per cheque and type; read status is personal to each staff user. Finalized cheques are filtered out of the attention list.
 
-The database job runs independently of the browser. The visible application refreshes data once per minute and on returning to the tab. A cheque appears once in the attention list, with an overdue reminder taking priority over its earlier due reminder. External email, WhatsApp and push delivery are not configured; notifications appear in the application.
+The database job runs independently of the browser. Visible tabs check live records every 15 seconds and on returning online or returning to the tab. Successful edits refresh the data immediately; other tabs on the same origin are notified to fetch a fresh snapshot. Updates use an authenticated, private, uncached JSON response and preserve filters, keyboard focus and unsaved form values. Failed background requests leave the current screen visible and retry on the next update. Workspace, account or role changes reset private client state. A cheque appears once in the attention list, with an overdue reminder taking priority over its earlier due reminder. External email, WhatsApp and push delivery are not configured; notifications appear in the application.
+
+Filter result regions retain their measured height as rows are narrowed, and table column proportions remain fixed while filtering. Space is recalculated for a changed viewport and released for printing. This keeps subsequent panels and the page width stable without adding fictitious rows or hiding filtered data. Initial page navigation still has a loading state; filtering and background data updates do not replace the page with it.
 
 ## Document handling and access
 

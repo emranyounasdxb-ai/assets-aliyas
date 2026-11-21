@@ -5,6 +5,8 @@ import { ArrowRight, CheckCircle, Plus, Printer } from "@phosphor-icons/react";
 import { dateLabel, daysUntil, todayDubai, unitLabel } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
+  StableRegion,
+  StableTable,
   BackLink,
   Badge,
   Button,
@@ -107,11 +109,11 @@ export function Agreements({
         <span className="toolbar-spacer" />
         <span className="filter-label">{list.total} agreements</span>
       </div>
-      <div className="panel">
+      <StableRegion className="panel">
         {list.total ? (
           <>
             <div className="table-wrap">
-              <table>
+              <StableTable>
                 <thead>
                   <tr>
                     <th>Agreement</th>
@@ -193,7 +195,7 @@ export function Agreements({
                     );
                   })}
                 </tbody>
-              </table>
+              </StableTable>
             </div>
             <Pagination {...list} />
           </>
@@ -207,7 +209,7 @@ export function Agreements({
             }
           />
         )}
-      </div>
+      </StableRegion>
     </>
   );
 }
@@ -410,7 +412,7 @@ export function AgreementDetail({ id }: { id: string }) {
         <h3>Reserved parking spaces</h3>
         {parking.length ? (
           <div className="table-wrap">
-            <table>
+            <StableTable>
               <thead>
                 <tr>
                   <th>Property</th>
@@ -429,7 +431,7 @@ export function AgreementDetail({ id }: { id: string }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StableTable>
           </div>
         ) : (
           <p className="muted">No paid parking included in this agreement.</p>
@@ -453,7 +455,7 @@ export function AgreementDetail({ id }: { id: string }) {
         )}
         <h3>Rent cheque schedule</h3>
         <div className="table-wrap">
-          <table>
+          <StableTable>
             <thead>
               <tr>
                 <th>Number</th>
@@ -474,7 +476,7 @@ export function AgreementDetail({ id }: { id: string }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StableTable>
         </div>
         <div className="signature-grid">
           <div>Property manager signature / date</div>
