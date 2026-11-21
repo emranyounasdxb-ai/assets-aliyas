@@ -47,6 +47,13 @@ Build one system to manage the company's buildings in Ajman, their flats, tenant
 - Show the number of customers or tenants; define active and historical counts separately during review.
 - Support reviewing rental and cheque records across all buildings.
 
+### Simplicity, speed and secure file handling
+
+- Images, maps, customer documents and contracts are core application records. Plan their storage and access before application development.
+- Keep routine property, tenant and document management simple to use.
+- Keep the application responsive as the number of records and uploaded files grows.
+- Protect private documents and contracts with authenticated, authorized access.
+
 ## Proposed operating rules for discussion
 
 These are proposed requirements, not approved business decisions.
@@ -81,10 +88,26 @@ These are proposed requirements, not approved business decisions.
 ### Files and access
 
 - Store actual passports, Emirates IDs, bank statements, cheque images and signed agreements in private application storage with authenticated access. Do not put these files in the public GitHub repository.
+- Use dedicated private file storage for uploaded content; keep file metadata and record relationships in the database. Choose the provider during technical planning.
 - Link each file to the correct tenant, agreement or property record.
 - Define staff permissions for viewing documents, changing rent, recording payments and exporting reports.
+- Check permissions on every upload, preview, download, replacement and deletion, including direct file requests. Knowing a file identifier or URL must not grant access. Any temporary download links must expire.
+- Protect file transfers with HTTPS and encrypt stored files, database records and backups. Keep storage credentials on the server.
+- Validate allowed file formats, actual file contents and size limits on the server. Keep new uploads unavailable until validation and malware checks pass. Confirm supported formats and limits from the actual documents before implementation.
+- Preserve original documents and signed agreements. Record replacements as new versions with their author and time rather than silently overwriting history.
+- Keep previews, thumbnails and derived files private under the same access rules as their originals. Avoid recording document contents, credentials or temporary access links in logs.
 - Keep a history of material financial and agreement changes, with the responsible user and time.
-- Define backups, restore expectations and document upload limits during technical planning.
+- Back up both the database and file storage, preserving their relationships. Define backup frequency, retention, recovery expectations and deletion rules during technical planning, and verify restoration before storing real customer documents.
+
+### Performance and reliability
+
+- Load property photo thumbnails in lists and galleries; fetch full files only when requested. Keep original documents and contracts unchanged when generating previews.
+- Paginate large lists and load document contents on demand instead of downloading all attachments with each customer or property record.
+- Run costly file scanning and preview generation in background jobs, with visible pending or failed states and safe retries.
+- Show upload progress and recoverable errors. An interrupted upload must not appear as a successfully saved document or create duplicate attachments when retried.
+- Complete storage and metadata updates consistently, and reconcile incomplete uploads or missing files so that records do not silently point to unavailable content.
+- Run cheque reminders as durable scheduled work independently of whether a user has the application open.
+- Agree measurable page response, upload and report performance targets after confirming expected file sizes, total records, concurrent users and hosting. Verify them with representative data before launch.
 
 ## Initial workflow
 
