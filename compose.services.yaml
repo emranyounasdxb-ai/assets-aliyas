@@ -1,0 +1,16 @@
+name: aliyas-services
+services:
+  scanner:
+    image: clamav/clamav:1.5.5
+    container_name: aliyas-scanner
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:56331:3310"
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+      CLAMD_STARTUP_TIMEOUT: "600"
+    volumes:
+      - scanner-data:/var/lib/clamav
+    mem_limit: 2g
+volumes:
+  scanner-data:

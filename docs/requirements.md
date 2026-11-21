@@ -1,10 +1,10 @@
 # Property and Rental Management Requirements Draft
 
-Status: Initial discussion draft, pending business decisions.
+Status: Working local version implemented with provisional operating rules; business review pending.
 
 Date: 21 November 2026.
 
-Build one system to manage the company's buildings in Ajman, their flats, tenants, annual rental agreements, tenant balances, documents and rental cheques. Complete and review requirements before starting application development. The company name and its English spelling remain to be confirmed.
+Manage the company's buildings in Ajman, their flats, tenants, annual rental agreements, tenant balances, documents and rental cheques. The user has authorized application coding and a local browser preview. The company name, its English spelling and the remaining business decisions below still need review.
 
 ## Confirmed requirements
 
@@ -139,4 +139,4 @@ Proposed starting assumptions, pending confirmation: an internal web application
 4. Choose the technical stack, hosting and storage based on the approved scope.
 5. Review interface designs and acceptance criteria before coding.
 
-The user has authorized selecting and installing the latest stable compatible development tools. The selected toolchain and local setup are documented in [Development Toolchain and Setup](development-setup.md). Business schema, balance calculations, contract templates and application features remain to be finalized and implemented.
+The selected toolchain is documented in [Development Toolchain and Setup](development-setup.md). The implemented workflows, provisional balance calculations, file handling, tests and remaining production configuration are documented in [Application and Operating Rules](application.md). The official tenancy template and unresolved business rules still require review.

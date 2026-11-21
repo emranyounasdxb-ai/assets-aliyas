@@ -1,0 +1,655 @@
+import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { randomBytes, randomUUID } from "node:crypto";
+import net from "node:net";
+import sharp from "sharp";
+import { todayDubai } from "../../src/lib/domain";
+const origin = "http://127.0.0.1:3200";
+let context: BrowserContext;
+let page: Page;
+let admin: SupabaseClient;
+let workspace = "";
+let tenant = "";
+let unit = "";
+let building = "";
+let lease = "";
+let documentId = "";
+let propertyPhoto = "";
+const auxiliaryUsers: string[] = [];
+const auxiliaryWorkspaces: string[] = [];
+async function action(
+  name: string,
+  data: Record<string, unknown>,
+  ctx = context,
+) {
+  return ctx.request.post(`${origin}/api/records`, {
+    headers: { origin },
+    data: { action: name, data },
+  });
+}
+async function readRows(table: string) {
+  const { data, error } = await admin
+    .from(table)
+    .select("*")
+    .eq("workspace_id", workspace);
+  if (error) throw error;
+  return data ?? [];
+}
+async function checkedAction(name: string, data: Record<string, unknown>) {
+  const response = await action(name, data);
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json();
+}
+async function cleanupWorkspace(id: string) {
+  const { data: files } = await admin.storage
+    .from("aliyas-private")
+    .list(id, { limit: 1000 });
+  if (files?.length)
+    await admin.storage
+      .from("aliyas-private")
+      .remove(files.map((f) => `${id}/${f.name}`));
+  const { data: notices } = await admin
+    .from("notifications")
+    .select("id")
+    .eq("workspace_id", id);
+  if (notices?.length)
+    await admin
+      .from("notification_reads")
+      .delete()
+      .in(
+        "notification_id",
+        notices.map((n) => n.id),
+      );
+  for (const table of [
+    "activities",
+    "notifications",
+    "documents",
+    "ledger",
+    "deposits",
+    "cheques",
+    "leases",
+    "units",
+    "floors",
+    "tenants",
+    "memberships",
+    "buildings",
+  ]) {
+    const { error } = await admin.from(table).delete().eq("workspace_id", id);
+    if (error) throw error;
+  }
+  const { error } = await admin.from("workspaces").delete().eq("id", id);
+  if (error) throw error;
+}
+test.describe.serial("Property management workspace", () => {
+  test("the file scanner rejects the harmless antivirus test signature", async () => {
+    const signature = Buffer.from(
+      "X5O!P%@AP[4\\PZX54(P^)7CC)7}$" +
+        "EICAR-" +
+        "STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
+    );
+    const result = await new Promise<string>((resolve, reject) => {
+      const socket = net.createConnection({ host: "127.0.0.1", port: 56331 });
+      let reply = "";
+      socket.setTimeout(10000, () => {
+        socket.destroy();
+        reject(new Error("Scanner test timed out"));
+      });
+      socket.on("error", reject);
+      socket.on("connect", () => {
+        const length = Buffer.alloc(4);
+        length.writeUInt32BE(signature.length);
+        socket.write(
+          Buffer.concat([
+            Buffer.from("zINSTREAM\0"),
+            length,
+            signature,
+            Buffer.alloc(4),
+          ]),
+        );
+      });
+      socket.on("data", (chunk) => {
+        reply += chunk.toString();
+        if (reply.includes("\0")) {
+          socket.end();
+          resolve(reply);
+        }
+      });
+    });
+    expect(result).toContain("FOUND");
+  });
+  test.beforeAll(async ({ browser }) => {
+    const backend = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const secret = process.env.SUPABASE_SECRET_KEY;
+    if (!backend || !secret || new URL(backend).hostname !== "127.0.0.1")
+      throw new Error("Tests require the local backend");
+    admin = createClient(backend, secret, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    context = await browser.newContext();
+    const login = await context.request.post(`${origin}/api/auth`, {
+      headers: { origin },
+      data: { action: "demo" },
+    });
+    expect(login.ok(), await login.text()).toBe(true);
+    const response = await checkedAction("workspace_create", {
+      name: `Verification workspace ${Date.now()}`,
+    });
+    workspace = response.id;
+    page = await context.newPage();
+  });
+  test.afterAll(async () => {
+    await context?.close();
+    for (const id of [workspace, ...auxiliaryWorkspaces])
+      if (id) await cleanupWorkspace(id);
+    for (const id of auxiliaryUsers) await admin.auth.admin.deleteUser(id);
+  });
+  test("creates and edits a property and saves its floors after reload", async () => {
+    await page.goto(`${origin}/properties`);
+    await page
+      .getByRole("button", { name: "Add property", exact: true })
+      .click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("Property name").fill("Verification Residence");
+    await form.getByLabel("Property code").fill("QA-RES");
+    await form.getByLabel("Area", { exact: true }).fill("Al Nuaimiya");
+    await form.getByLabel("Upper floors").fill("2");
+    await form
+      .getByRole("button", { name: "Save property", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Verification Residence" }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Verification Residence" }),
+    ).toBeVisible();
+    const rows = await readRows("buildings");
+    expect(rows).toHaveLength(1);
+    building = rows[0].id;
+    expect(await readRows("floors")).toHaveLength(3);
+    await page
+      .getByRole("button", { name: "Edit Verification Residence" })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByLabel("Area", { exact: true })
+      .fill("Al Rawda");
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(page.getByText("Al Rawda, Ajman")).toBeVisible();
+  });
+  test("adds a flat and a tenant through their forms", async () => {
+    await page.goto(`${origin}/properties/${building}`);
+    await page.getByRole("button", { name: "Add flat", exact: true }).click();
+    let form = page.getByRole("dialog");
+    await form.getByLabel("Flat number").fill("101");
+    await form.getByLabel("Monthly asking rent (AED)").fill("4500");
+    await form.getByLabel("Area (sq ft)").fill("780");
+    await form.getByRole("button", { name: "Save flat", exact: true }).click();
+    await expect(page.getByRole("button", { name: /Flat 101/ })).toBeVisible();
+    unit = (await readRows("units"))[0].id;
+    await page.goto(`${origin}/tenants`);
+    await page.getByRole("button", { name: "Add tenant", exact: true }).click();
+    form = page.getByRole("dialog");
+    await form.getByLabel("Full name").fill("Verification Tenant");
+    await form.getByLabel("Phone number").fill("+971 50 000 0000");
+    await form.getByLabel("Email address").fill("verification@example.test");
+    await form.getByLabel("Opening balance (AED)").fill("125.50");
+    await form
+      .getByRole("button", { name: "Save tenant", exact: true })
+      .click();
+    await expect(page.getByText("Verification Tenant")).toBeVisible();
+    tenant = (await readRows("tenants"))[0].id;
+    expect((await readRows("ledger"))[0].amount).toBe(12550);
+  });
+  test("creates an annual agreement with exact installments and rejects an overlap", async () => {
+    await page.goto(`${origin}/agreements`);
+    await page
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("Annual agreed rent (AED)").fill("54000.01");
+    await form.getByLabel("Rent cheques").selectOption("6");
+    await form.getByLabel("Agreement reference").fill("QA-AGREEMENT-01");
+    await form.getByLabel("Tenant's bank").fill("Verification Bank");
+    await form
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    await expect(
+      page.getByRole("link", { name: "QA-AGREEMENT-01", exact: true }),
+    ).toBeVisible();
+    lease = (await readRows("leases"))[0].id;
+    const checks = await readRows("cheques");
+    expect(checks).toHaveLength(6);
+    expect(checks.reduce((s, c) => s + c.amount, 0)).toBe(5400001);
+    expect(checks.every((c) => c.status === "scheduled")).toBe(true);
+    const overlap = await action("lease", {
+      tenant_id: tenant,
+      unit_id: unit,
+      start_date: todayDubai(),
+      annual_rent: "54000",
+      installments: 4,
+      reference: "QA-OVERLAP",
+      bank: "",
+    });
+    expect(overlap.status()).toBe(400);
+    expect(await readRows("leases")).toHaveLength(1);
+    expect(await readRows("ledger")).toHaveLength(2);
+  });
+  test("clears a cheque and credits a payment once, keeping security separate", async () => {
+    const cheque = (await readRows("cheques")).sort((a, b) =>
+      a.due_date.localeCompare(b.due_date),
+    )[0];
+    const payload = {
+      id: cheque.id,
+      status: "cleared",
+      number: "QA-470001",
+      bank: "Verification Bank",
+      on_date: todayDubai(),
+    };
+    await Promise.all([
+      checkedAction("cheque", payload),
+      checkedAction("cheque", payload),
+    ]);
+    let entries = await readRows("ledger");
+    expect(entries.filter((e) => e.cheque_id === cheque.id)).toHaveLength(1);
+    const request_key = randomUUID();
+    const payment = {
+      tenant_id: tenant,
+      amount: "-20.25",
+      kind: "payment",
+      description: "Verification bank transfer",
+      entry_date: todayDubai(),
+      request_key,
+    };
+    await checkedAction("account", payment);
+    await checkedAction("account", payment);
+    entries = await readRows("ledger");
+    expect(
+      entries.filter((e) => e.idempotency_key === request_key),
+    ).toHaveLength(1);
+    const count = entries.length;
+    await checkedAction("security", {
+      tenant_id: tenant,
+      amount: "1500",
+      reference: "QA-CASH-SEC",
+      type: "cash",
+    });
+    await checkedAction("security", {
+      tenant_id: tenant,
+      amount: "5000",
+      reference: "QA-CHEQUE-SEC",
+      type: "cheque",
+      bank: "Verification Bank",
+    });
+    expect(await readRows("ledger")).toHaveLength(count);
+    const security = (await readRows("cheques")).find(
+      (c) => c.purpose === "security",
+    );
+    const invalid = await action("cheque", {
+      id: security.id,
+      status: "cleared",
+      number: security.number,
+      bank: security.bank,
+      on_date: todayDubai(),
+    });
+    expect(invalid.status()).toBe(400);
+    const future = (await readRows("cheques")).filter(
+      (c) => c.purpose === "rent" && c.status === "scheduled",
+    )[0];
+    const tomorrow = new Date(`${todayDubai()}T12:00:00Z`);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    expect(
+      (
+        await action("cheque", {
+          id: future.id,
+          status: "cleared",
+          number: future.number,
+          bank: future.bank,
+          on_date: tomorrow.toISOString().slice(0, 10),
+        })
+      ).status(),
+    ).toBe(400);
+  });
+  test("uploads, versions, retries and privately downloads a scanned document", async () => {
+    const pdfPage = await context.newPage();
+    await pdfPage.setContent(
+      "<html><body><h1>Verification document</h1><p>Fictional test data only.</p></body></html>",
+    );
+    const pdf = await pdfPage.pdf({ format: "A4" });
+    await pdfPage.close();
+    await page.goto(`${origin}/tenants/${tenant}`);
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    let form = page.getByRole("dialog");
+    await form.getByLabel("Document category").selectOption("Passport");
+    await form.getByLabel("Choose document file").setInputFiles({
+      name: "verification-passport.pdf",
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+    await form
+      .getByRole("button", { name: "Upload document", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 60000 });
+    await expect(
+      page.getByText("verification-passport.pdf", { exact: true }),
+    ).toBeVisible();
+    const docs = await readRows("documents");
+    expect(docs).toHaveLength(1);
+    documentId = docs[0].id;
+    expect(docs[0].scan_engine).toBe("ClamAV");
+    expect(
+      (
+        await context.request.get(`${origin}/api/documents/${documentId}/file`)
+      ).status(),
+    ).toBe(200);
+    await page
+      .getByRole("button", { name: "Replace verification-passport.pdf" })
+      .click();
+    form = page.getByRole("dialog");
+    await form.getByLabel("Choose document file").setInputFiles({
+      name: "verification-passport-v2.pdf",
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+    await form
+      .getByRole("button", { name: "Upload document", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 60000 });
+    await expect(
+      page.getByText("verification-passport-v2.pdf", { exact: true }),
+    ).toBeVisible();
+    const versions = await readRows("documents");
+    expect(versions).toHaveLength(2);
+    const latest = versions.find((d) => d.status === "current");
+    expect(latest.version).toBe(2);
+    expect(versions.find((d) => d.id === documentId).status).toBe("superseded");
+    const retry = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: { name: latest.name, mimeType: "application/pdf", buffer: pdf },
+        target_type: "tenant",
+        target_id: tenant,
+        category: "Passport",
+        request_key: latest.upload_key,
+      },
+    });
+    expect(retry.ok(), await retry.text()).toBe(true);
+    expect(await readRows("documents")).toHaveLength(2);
+    const invalid = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: {
+          name: "disguised.pdf",
+          mimeType: "application/pdf",
+          buffer: Buffer.from("<script>not a document</script>"),
+        },
+        target_type: "tenant",
+        target_id: tenant,
+        category: "Passport",
+        request_key: randomUUID(),
+      },
+    });
+    expect(invalid.status()).toBe(400);
+    expect(await readRows("documents")).toHaveLength(2);
+  });
+  test("stores a private original image and a WebP property preview", async () => {
+    const png = await sharp({
+      create: {
+        width: 64,
+        height: 48,
+        channels: 3,
+        background: { r: 110, g: 145, b: 95 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const response = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: {
+          name: "verification-property.png",
+          mimeType: "image/png",
+          buffer: png,
+        },
+        target_type: "building",
+        target_id: building,
+        category: "Photo",
+        request_key: randomUUID(),
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    propertyPhoto = (await response.json()).id;
+    const original = await context.request.get(
+      `${origin}/api/documents/${propertyPhoto}/file`,
+    );
+    expect(await original.body()).toEqual(png);
+    const preview = await context.request.get(
+      `${origin}/api/documents/${propertyPhoto}/file?preview=1`,
+    );
+    expect((await preview.body()).subarray(8, 12).toString()).toBe("WEBP");
+    const stored = (await readRows("documents")).find(
+      (d) => d.id === propertyPhoto,
+    );
+    const publicFile = await context.request.get(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/aliyas-private/${stored.storage_path}`,
+    );
+    expect(publicFile.status()).not.toBe(200);
+  });
+  test("accepts a supported document larger than the framework default body buffer", async () => {
+    const padding = Buffer.alloc(11 * 1024 * 1024, 32);
+    const pdf = Buffer.concat([
+      Buffer.from("%PDF-1.4\n% Local fictional upload limit check\n"),
+      padding,
+      Buffer.from("\n%%EOF"),
+    ]);
+    const response = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: {
+          name: "verification-large.pdf",
+          mimeType: "application/pdf",
+          buffer: pdf,
+        },
+        target_type: "tenant",
+        target_id: tenant,
+        category: "Other",
+        request_key: randomUUID(),
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    const id = (await response.json()).id;
+    expect((await readRows("documents")).find((d) => d.id === id).size).toBe(
+      pdf.length,
+    );
+  });
+  test("keeps reports complete beyond the database API page size", async () => {
+    const rows = Array.from({ length: 1005 }, (_, index) => ({
+      workspace_id: workspace,
+      tenant_id: tenant,
+      lease_id: lease,
+      number: `QA-PAGE-${index}`,
+      bank: "Verification Bank",
+      amount: 1,
+      due_date: todayDubai(),
+      purpose: "rent",
+      status: "cancelled",
+    }));
+    const { error } = await admin.from("cheques").insert(rows);
+    if (error) throw error;
+    await page.goto(`${origin}/cheques`);
+    await expect(page.getByText("1–10 of 1011", { exact: true })).toBeVisible();
+  });
+  test("denies anonymous requests, viewer mutations and cross-workspace document access", async ({
+    browser,
+  }) => {
+    const anonymous = await browser.newContext();
+    expect(
+      (
+        await anonymous.request.get(
+          `${origin}/api/documents/${documentId}/file`,
+        )
+      ).status(),
+    ).toBe(401);
+    expect(
+      (
+        await anonymous.request.post(`${origin}/api/records`, {
+          headers: { origin },
+          data: { action: "tenant", data: {} },
+        })
+      ).status(),
+    ).toBe(401);
+    await anonymous.close();
+    expect(
+      (
+        await context.request.post(`${origin}/api/records`, {
+          headers: { origin: "https://example.test" },
+          data: { action: "tenant", data: {} },
+        })
+      ).status(),
+    ).toBe(403);
+    for (const role of ["viewer", "outsider"]) {
+      const email = `${randomUUID()}@example.test`;
+      const password = randomBytes(24).toString("base64url");
+      const { data: user, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      if (error || !user.user)
+        throw new Error("Could not create test principal");
+      auxiliaryUsers.push(user.user.id);
+      let memberWorkspace = workspace;
+      if (role === "outsider") {
+        const { data: created, error: createError } = await admin
+          .from("workspaces")
+          .insert({ name: "Verification isolated workspace", is_demo: true })
+          .select("id")
+          .single();
+        if (createError || !created)
+          throw new Error("Could not create isolated workspace");
+        memberWorkspace = created.id;
+        auxiliaryWorkspaces.push(created.id);
+      }
+      const { error: membershipError } = await admin
+        .from("memberships")
+        .insert({
+          workspace_id: memberWorkspace,
+          user_id: user.user.id,
+          role: role === "viewer" ? "viewer" : "owner",
+          display_name: `Verification ${role}`,
+        });
+      if (membershipError) throw membershipError;
+      const other = await browser.newContext();
+      const response = await other.request.post(`${origin}/api/auth`, {
+        headers: { origin },
+        data: { action: "login", email, password },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+      expect(
+        (
+          await other.request.get(`${origin}/api/documents/${documentId}/file`)
+        ).status(),
+      ).toBe(404);
+      if (role === "viewer") {
+        expect(
+          (
+            await action(
+              "tenant",
+              { name: "Forbidden", phone: "No contact" },
+              other,
+            )
+          ).status(),
+        ).toBe(403);
+        expect(
+          (
+            await other.request.get(
+              `${origin}/api/documents/${propertyPhoto}/file?preview=1`,
+            )
+          ).status(),
+        ).toBe(200);
+      } else {
+        const authClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
+          { auth: { persistSession: false, autoRefreshToken: false } },
+        );
+        await authClient.auth.signInWithPassword({ email, password });
+        const { data: rows } = await authClient
+          .from("tenants")
+          .select("id")
+          .eq("workspace_id", workspace);
+        expect(rows ?? []).toHaveLength(0);
+      }
+      await other.close();
+    }
+  });
+  test("exports a real occupancy CSV and displays a printable agreement", async () => {
+    await page.goto(`${origin}/reports`);
+    const download = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Export occupancy", exact: true })
+      .click();
+    expect((await download).suggestedFilename()).toBe(
+      "aliyas-occupancy-report.csv",
+    );
+    await page.goto(`${origin}/agreements/${lease}`);
+    await expect(
+      page.getByRole("heading", { name: "Tenancy agreement summary" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Unsigned draft", { exact: true }),
+    ).toBeVisible();
+  });
+  test("keeps the mobile layout, keyboard focus and reduced motion usable", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${origin}/`);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Open navigation", exact: true })
+      .click();
+    await expect(
+      page.getByRole("link", { name: "Properties", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("button", { name: "Search workspace", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Tab");
+    expect(
+      await page.evaluate(
+        () =>
+          !!document.querySelector("dialog")?.contains(document.activeElement),
+      ),
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    for (const route of [
+      "properties",
+      "units",
+      "tenants",
+      "agreements",
+      "cheques",
+      "wallets",
+      "documents",
+      "reports",
+      "settings",
+    ]) {
+      await page.goto(`${origin}/${route}`);
+      await expect(page.locator("h1")).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+        `Horizontal overflow at ${route}`,
+      ).toBe(true);
+    }
+  });
+});

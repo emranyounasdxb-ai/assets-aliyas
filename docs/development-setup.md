@@ -1,6 +1,6 @@
 # Development Toolchain and Setup
 
-Selected on 21 November 2026 for the property and rental management application. This stage installs and verifies development tools; property screens, business tables, permissions and rental workflows will be implemented separately.
+Selected on 21 November 2026 for the property and rental management application. These tools now support the working local application. See [Application and Operating Rules](application.md) for the browser preview, workflows and production configuration.
 
 ## Selected tools
 
@@ -31,6 +31,9 @@ Direct package versions were checked against the npm registry's stable `latest` 
 | Unit test runner                                          | Vitest                              | 5.1.1   |
 | Test runner build dependency                              | Vite                                | 8.3.8   |
 | Browser testing                                           | Playwright Test                     | 1.65.1  |
+| Self hosted typeface                                      | Geist                               | 1.9.2   |
+| Server module boundary                                    | server-only                         | 0.0.1   |
+| Upload malware scanning                                   | ClamAV Docker image                 | 1.5.5   |
 
 Matching Node and React type packages are also installed. Docker Desktop 4.99.0 with Docker Engine 29.9.3 was already installed and running on this workstation and is used for the local backend.
 
@@ -76,7 +79,7 @@ The local project ID is `assets-aliyas`. The start command creates a dedicated D
 
 The first backend start downloads its container images. Local development email stays in the development inbox. No paid hosted project or external email/WhatsApp service is provisioned by this setup.
 
-Public signup and anonymous login are disabled. Automatic exposure of new public-schema tables to the Data API is disabled. Future migrations must explicitly establish grants and row-level security. Realtime, vector storage, analytics and the Edge Functions runtime are disabled until needed. Private storage buckets and document access policies will be created with the application's schema.
+Public signup and anonymous login are disabled. Automatic exposure of new public-schema tables to the Data API is disabled. The application migrations explicitly establish grants, workspace row-level security, private storage and finance permissions. Realtime, vector storage, analytics and the Edge Functions runtime are disabled until needed. The scanner runs separately on loopback port 56331 using `compose.services.yaml`.
 
 Use `.env.example` as the list of application environment variables. Local backend keys are available through the local status command; put actual values in ignored `.env.local`. The public publishable key does not replace access policies. A secret key belongs only on the server.
 
@@ -94,14 +97,18 @@ An ignored `.env.local` containing this workstation's local development connecti
 
 The verification script checks the Node version and every installed direct package against the manifest. It also exercises React server rendering, validation, Supabase module loading, native image conversion, component generator glob matching and an actual headless Chromium launch.
 
-Unit tests and browser test runners are installed. Application tests, the root Next.js build and the development server become applicable after application routes and test cases are added. Tooling verification does not claim that application features or access policies already exist.
+Application validation now includes `pnpm test:run`, `pnpm test:e2e`, `pnpm lint` and `pnpm build`. Use `scripts/preview-local.ps1` to start an optimized local preview before browser testing.
 
 ## Workstation verification
 
 Verified on 21 November 2026:
 
 - Node.js and all direct package versions match the pinned manifest.
-- A temporary Next.js production build with TypeScript 7, React and Tailwind passed. Its fixture and build output stay under ignored `.tools`; no application pages were added.
+- The complete application production build passed with TypeScript 7, React and Tailwind.
+- Ten domain and local preview unit tests and twelve browser workflow tests passed against the optimized local application.
+- Browser tests verified original image preservation, private WebP previews, scanned PDF uploads, document versions, access restrictions and uploads larger than 10 MB.
+- The database pagination test verified complete results beyond the 1,000-row API page size.
+- Encrypted database and file-storage backup creation, decryption and archive-format verification passed. A full restoration drill remains deployment work.
 - React rendering, Zod, Supabase SDK loading, native Sharp conversion, generator glob matching and headless Chromium checks passed.
 - Biome linting and Prettier formatting checks passed.
 - The package audit reported no known vulnerabilities after the scoped dependency patch; peer dependency checks passed.
@@ -109,7 +116,7 @@ Verified on 21 November 2026:
 - Docker inspection confirmed that all four published project ports bind only to `127.0.0.1`.
 - Local environment values and downloaded tool binaries are ignored by Git.
 
-## Development after application scaffolding
+## Application development
 
 ```powershell
 .\scripts\pnpm.ps1 dev
@@ -118,9 +125,9 @@ Verified on 21 November 2026:
 .\scripts\pnpm.ps1 test:e2e
 ```
 
-The application commands bind to loopback for local development. UI components, application styling, contract generation, business schema and cheque reminders will be implemented in the next stage using this toolchain. Reminder scheduling can use Supabase Cron; the job and delivery channel are still to be defined.
+The application commands bind to loopback. Property management, tenant profiles, accounts, cheque workflows, private documents and reports are implemented. PostgreSQL Cron creates application reminders daily at 08:00 Dubai time; the visible application refreshes data once per minute.
 
-Hosting, backup storage, upload scanning and notification delivery need provider configuration before production use. Supabase's development storage alone does not implement malware scanning, automatic document versioning or a production backup strategy. Those remain application and deployment requirements in `requirements.md`.
+Hosted infrastructure, off-device backup storage, scanner hosting and external notification delivery need provider configuration before production use. The local application already implements scanning, private access and document version history. See `application.md` for the remaining deployment work.
 
 ## Sources
 
@@ -135,3 +142,4 @@ Hosting, backup storage, upload scanning and notification delivery need provider
 - [Supabase local network binding](https://supabase.com/docs/guides/local-development)
 - [shadcn installation](https://ui.shadcn.com/docs/installation/next)
 - [Biome installation](https://biomejs.dev/installation/quick-start/)
+- [ClamAV Docker installation](https://docs.clamav.net/manual/Installing/Docker.html)
