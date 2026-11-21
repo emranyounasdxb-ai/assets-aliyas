@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as pause } from "node:timers/promises";
 
-const directory = path.resolve("dist/cpanel");
+// Run outside the checkout so missing dependencies cannot resolve from the
+// development node_modules and hide an incomplete deployment package.
+const directory = await mkdtemp(path.join(tmpdir(), "aliyas-cpanel-"));
+await cp(path.resolve("dist/cpanel"), directory, {
+  recursive: true,
+  dereference: false,
+  verbatimSymlinks: true,
+});
 const manifest = JSON.parse(
   await readFile(path.join(directory, "deploy-manifest.json"), "utf8"),
 );
@@ -73,4 +81,9 @@ try {
   );
 } finally {
   child.kill("SIGTERM");
+  await new Promise((resolve) => {
+    if (child.exitCode !== null) resolve();
+    else child.once("exit", resolve);
+  });
+  await rm(directory, { recursive: true, force: true });
 }

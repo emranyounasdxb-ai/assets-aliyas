@@ -9,6 +9,7 @@ import {
   readlink,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -45,6 +46,22 @@ await cp(".next/standalone", destination, {
   filter: (source) => !path.basename(source).startsWith(".env"),
 });
 await cp("public", path.join(destination, "public"), { recursive: true });
+// Turbopack traces the driver under .next/node_modules for application routes.
+// Maintenance scripts resolve it from the release root instead.
+const driver = path.join(destination, "node_modules/mysql2");
+try {
+  await realpath(driver);
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
+  const target = path.relative(
+    path.resolve("node_modules"),
+    await realpath("node_modules/mysql2"),
+  );
+  await readFile(
+    path.join(destination, "node_modules", target, "package.json"),
+  );
+  await symlink(target, driver);
+}
 // Next optimizes date-fns into its server bundle. Maintenance scripts also use
 // the unbundled package, so include its self-contained, pinned distribution.
 const dates = path.join(destination, "node_modules/date-fns");
