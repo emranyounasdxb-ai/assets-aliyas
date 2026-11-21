@@ -71,6 +71,7 @@ await cp(".next/static", path.join(destination, ".next/static"), {
   recursive: true,
 });
 await cp("deploy/cpanel/app.cjs", path.join(destination, "app.cjs"));
+await cp("deploy/cpanel/launcher.cjs", path.join(destination, "launcher.cjs"));
 await cp(
   "deploy/cpanel/assets.htaccess.example",
   path.join(destination, "assets.htaccess.example"),
@@ -80,8 +81,10 @@ await mkdir(path.join(destination, "scripts"), { recursive: true });
 for (const script of [
   "migrate.mjs",
   "create-admin.mjs",
+  "setup-owner.mjs",
   "seed-portfolio.mjs",
   "reminders.mjs",
+  "backup-local.mjs",
 ])
   await cp(
     path.join("scripts", script),

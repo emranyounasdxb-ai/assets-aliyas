@@ -1,10 +1,6 @@
 # Apply only to the assets subdomain's document root.
 # Preserve its HTTPS redirect. Never copy into the main website's public_html.
 Options -Indexes
-PassengerEnabled on
-PassengerAppType node
-PassengerAppRoot /home/aliyasrealestate/apps/assets-aliyas/current
-PassengerStartupFile app.cjs
-PassengerNodejs /usr/bin/node
-PassengerAppEnv production
-SetEnv ALIYAS_ENV_FILE /home/aliyasrealestate/assets-aliyas-private/runtime.env
+# Configure Passenger through cPanel Application Manager. Current Passenger
+# versions reject its application directives in .htaccess.
+# Application path: apps/assets-aliyas/launcher, production, base URL /.
