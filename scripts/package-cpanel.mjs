@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  readlink,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { deploymentSettings } from "./validate-deployment.mjs";
 
@@ -29,7 +38,10 @@ await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
 await cp(".next/standalone", destination, {
   recursive: true,
-  dereference: true,
+  // pnpm links preserve the dependency's own resolution path. Flattening them
+  // changes its ancestors and can hide required transitive packages.
+  dereference: false,
+  verbatimSymlinks: true,
   filter: (source) => !path.basename(source).startsWith(".env"),
 });
 await cp("public", path.join(destination, "public"), { recursive: true });
@@ -68,10 +80,16 @@ const secrets = [
 async function inspect(directory) {
   for (const item of await readdir(directory, { withFileTypes: true })) {
     const full = path.join(directory, item.name);
-    assert.ok(
-      !item.isSymbolicLink(),
-      "Deployment packages must contain actual files",
-    );
+    if (item.isSymbolicLink()) {
+      const link = await readlink(full);
+      assert.ok(!path.isAbsolute(link), "Package links must be relative");
+      const target = await realpath(full);
+      assert.ok(
+        target.startsWith(destination + path.sep),
+        "Package links must stay inside the release",
+      );
+      continue;
+    }
     assert.ok(
       !item.name.startsWith(".env") || item.name === ".env.production.example",
       "A private environment file was copied",

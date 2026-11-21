@@ -34,7 +34,7 @@ The workflow checks that this exact main commit has successful CI, then builds o
 3. Configure the variables listed in `deploy/cpanel/.env.production.example` through cPanel's application environment. `APP_ORIGIN` and the public Supabase settings must match the package. Set the actual server secret key and private scanner host/port only on the host.
 4. Restart the application through cPanel. Verify `/api/health`, sign in with a staff account, check workspace isolation, upload/scanning, private downloads, agreements, parking, collections and reminders. Confirm the server logs and backup/restore procedure before importing private customer documents.
 
-Changing the public backend or app origin requires a new package. Private runtime secrets can be rotated through the hosting environment without committing them to Git. Do not run `npm install` over the prebuilt standalone package or upload a Windows `node_modules` directory; native dependencies are verified in the Linux CI package.
+Changing the public backend or app origin requires a new package. Private runtime secrets can be rotated through the hosting environment without committing them to Git. Do not run `npm install` over the prebuilt standalone package or upload a Windows `node_modules` directory; native dependencies are verified in the Linux CI package. Transfer the archive and extract it on Linux so pnpm's internal relative dependency links remain intact. The packager verifies that every link resolves inside the release.
 
 The runtime package has been designed for Passenger's standard Node.js port interception. The hosting provider's installed Node.js version, Passenger configuration and native dependency compatibility must still be verified during actual deployment.
 
