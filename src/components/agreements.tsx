@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, CheckCircle, Plus, Printer } from "@phosphor-icons/react";
-import { dateLabel, daysUntil, todayDubai } from "@/lib/domain";
+import { dateLabel, daysUntil, todayDubai, unitLabel } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
   BackLink,
@@ -28,6 +28,7 @@ export function Agreements({
 }) {
   const { data, openForm } = useApp();
   const [query, setQuery] = useState("");
+  const [rentalType, setRentalType] = useState("all");
   const [status, setStatus] = useState(initialStatus);
   const today = todayDubai();
   const label = (l: (typeof data.leases)[number]) =>
@@ -44,6 +45,8 @@ export function Agreements({
       `${l.reference} ${data.tenants.find((t) => t.id === l.tenant_id)?.name} ${data.units.find((u) => u.id === l.unit_id)?.code}`
         .toLowerCase()
         .includes(query.toLowerCase()) &&
+      (rentalType === "all" ||
+        unitLabel(data.units.find((u) => u.id === l.unit_id)) === rentalType) &&
       (status === "all" ||
         (status === "expiring"
           ? l.status === "active" &&
@@ -69,7 +72,7 @@ export function Agreements({
             setQuery(v);
             list.setPage(1);
           }}
-          placeholder="Search agreements, tenants or flats…"
+          placeholder="Search agreements, tenants or units…"
         />
         <select
           className="filter-select"
@@ -88,6 +91,19 @@ export function Agreements({
             </option>
           ))}
         </select>
+        <select
+          className="filter-select"
+          aria-label="Filter agreement rental type"
+          value={rentalType}
+          onChange={(e) => {
+            setRentalType(e.target.value);
+            list.setPage(1);
+          }}
+        >
+          <option value="all">Flats & shops</option>
+          <option value="Flat">Flats only</option>
+          <option value="Shop">Shops only</option>
+        </select>
         <span className="toolbar-spacer" />
         <span className="filter-label">{list.total} agreements</span>
       </div>
@@ -100,7 +116,7 @@ export function Agreements({
                   <tr>
                     <th>Agreement</th>
                     <th>Tenant</th>
-                    <th>Property / Flat</th>
+                    <th>Property / Unit</th>
                     <th>Annual rent</th>
                     <th>Term</th>
                     <th>Status</th>
@@ -139,7 +155,7 @@ export function Agreements({
                         <td>
                           <strong>{b?.name}</strong>
                           <small>
-                            Flat {u?.code} · {u?.category}
+                            {unitLabel(u)} {u?.code} · {u?.category}
                           </small>
                         </td>
                         <td>
@@ -187,7 +203,7 @@ export function Agreements({
             description={
               data.leases.length
                 ? "Try another search or status."
-                : "Choose a tenant and flat to create your first annual agreement."
+                : "Choose a tenant and flat or shop to create your first annual agreement."
             }
           />
         )}
@@ -244,7 +260,7 @@ export function AgreementDetail({ id }: { id: string }) {
       <BackLink href="/agreements">All agreements</BackLink>
       <PageHeader
         title={lease.reference}
-        description={`${tenant?.name} · ${building?.name} · Flat ${unit?.code}`}
+        description={`${tenant?.name} · ${building?.name} · ${unitLabel(unit)} ${unit?.code}`}
       >
         <Button onClick={() => window.print()}>
           <Printer size={17} />
@@ -329,6 +345,18 @@ export function AgreementDetail({ id }: { id: string }) {
             <dt>Tenant</dt>
             <dd>{tenant?.name}</dd>
           </div>
+          {tenant?.company_name && (
+            <div>
+              <dt>Company name</dt>
+              <dd>{tenant.company_name}</dd>
+            </div>
+          )}
+          {tenant?.trade_license && (
+            <div>
+              <dt>Trade licence</dt>
+              <dd>{tenant.trade_license}</dd>
+            </div>
+          )}
           <div>
             <dt>Contact</dt>
             <dd>{tenant?.phone}</dd>
@@ -338,7 +366,7 @@ export function AgreementDetail({ id }: { id: string }) {
             <dd>{building?.name}</dd>
           </div>
           <div>
-            <dt>Flat</dt>
+            <dt>{unitLabel(unit)}</dt>
             <dd>
               {unit?.code} · {unit?.category}
             </dd>
@@ -369,7 +397,7 @@ export function AgreementDetail({ id }: { id: string }) {
             <dd>{lease.installments} cheques</dd>
           </div>
           <div>
-            <dt>Flat amenities</dt>
+            <dt>{unitLabel(unit)} amenities</dt>
             <dd>
               {unit?.amenities.join(", ") || "None additionally recorded"}
             </dd>
@@ -408,7 +436,7 @@ export function AgreementDetail({ id }: { id: string }) {
         )}
         <div className="contract-parking-total">
           <span>
-            Flat rent <Money value={lease.annual_rent} />
+            {unitLabel(unit)} rent <Money value={lease.annual_rent} />
           </span>
           <span>
             Parking <Money value={parkingTotal} />

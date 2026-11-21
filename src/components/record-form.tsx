@@ -11,6 +11,7 @@ import {
   money,
   todayDubai,
   unitStatus,
+  unitLabel,
 } from "@/lib/domain";
 import { useApp } from "./provider";
 import { ErrorText, Field, Modal, Money, SaveFooter } from "./ui";
@@ -18,6 +19,7 @@ export type FormKind =
   | "building"
   | "floor"
   | "unit"
+  | "shop"
   | "tenant"
   | "lease"
   | "cheque"
@@ -27,6 +29,7 @@ const names: Record<FormKind, string> = {
   building: "property",
   floor: "floor",
   unit: "flat",
+  shop: "shop",
   tenant: "tenant",
   lease: "agreement",
   cheque: "cheque",
@@ -55,11 +58,19 @@ export function RecordForm({
   const [floor, setFloor] = useState(
     val(
       "floor_id",
-      data.floors.find((f) => f.building_id === building)?.id ?? "",
+      data.floors.find(
+        (f) =>
+          f.building_id === building &&
+          !["parking", "service"].includes(f.purpose) &&
+          (kind !== "shop" || f.ordinal === 0),
+      )?.id ?? "",
     ),
   );
   const [unit, setUnit] = useState(val("unit_id", firstUnit?.id ?? ""));
   const selectedUnit = data.units.find((u) => u.id === unit);
+  const [rentalType, setRentalType] = useState(
+    selectedUnit?.category === "Shop" ? "Shop" : "Flat",
+  );
   const [rent, setRent] = useState(
     initial.annual_rent
       ? String(Number(initial.annual_rent) / 100)
@@ -99,7 +110,7 @@ export function RecordForm({
     if (initial.id) fields.id = initial.id;
     if (kind === "lease")
       fields.parking_lot_ids = form.getAll("parking_lot_ids");
-    if (["building", "unit"].includes(kind))
+    if (["building", "unit", "shop"].includes(kind))
       fields.amenities = form.getAll("amenities");
     if (kind === "account") {
       const amount = String(fields.amount);
@@ -283,7 +294,7 @@ export function RecordForm({
               </Field>
             </>
           )}
-          {kind === "unit" && (
+          {["unit", "shop"].includes(kind) && (
             <>
               <Field label="Property">
                 <select
@@ -293,8 +304,12 @@ export function RecordForm({
                   onChange={(e) => {
                     setBuilding(e.target.value);
                     setFloor(
-                      data.floors.find((f) => f.building_id === e.target.value)
-                        ?.id ?? "",
+                      data.floors.find(
+                        (f) =>
+                          f.building_id === e.target.value &&
+                          !["parking", "service"].includes(f.purpose) &&
+                          (kind !== "shop" || f.ordinal === 0),
+                      )?.id ?? "",
                     );
                   }}
                 >
@@ -306,7 +321,14 @@ export function RecordForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Floor">
+              <Field
+                label="Floor"
+                hint={
+                  kind === "shop"
+                    ? "Shops are registered on the ground floor."
+                    : undefined
+                }
+              >
                 <select
                   name="floor_id"
                   required
@@ -318,7 +340,8 @@ export function RecordForm({
                     .filter(
                       (f) =>
                         f.building_id === building &&
-                        !["parking", "service"].includes(f.purpose),
+                        !["parking", "service"].includes(f.purpose) &&
+                        (kind !== "shop" || f.ordinal === 0),
                     )
                     .map((f) => (
                       <option key={f.id} value={f.id}>
@@ -327,22 +350,31 @@ export function RecordForm({
                     ))}
                 </select>
               </Field>
-              <Field label="Flat number">
+              <Field label={kind === "shop" ? "Shop number" : "Flat number"}>
                 <input
                   name="code"
                   maxLength={30}
                   required
                   defaultValue={val("code")}
-                  placeholder="e.g. 101"
+                  placeholder={
+                    kind === "shop" ? "Enter the shop number" : "e.g. 101"
+                  }
                 />
               </Field>
-              <Field label="Category">
-                <select name="category" defaultValue={val("category", "1 BHK")}>
-                  {categories.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </Field>
+              {kind === "shop" ? (
+                <input type="hidden" name="category" value="Shop" />
+              ) : (
+                <Field label="Category">
+                  <select
+                    name="category"
+                    defaultValue={val("category", "1 BHK")}
+                  >
+                    {categories.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label="Monthly asking rent (AED)">
                 <input
                   name="monthly_rent"
@@ -370,6 +402,13 @@ export function RecordForm({
                 </select>
               </Field>
               {amenitiesField}
+              <Field wide label="Notes">
+                <textarea
+                  name="notes"
+                  maxLength={2000}
+                  defaultValue={val("notes")}
+                />
+              </Field>
             </>
           )}
           {kind === "tenant" && (
@@ -411,6 +450,21 @@ export function RecordForm({
                   maxLength={80}
                   defaultValue={val("nationality")}
                   placeholder="e.g. Pakistan"
+                />
+              </Field>
+              <Field label="Company name (optional)">
+                <input
+                  name="company_name"
+                  maxLength={160}
+                  defaultValue={val("company_name")}
+                  autoComplete="organization"
+                />
+              </Field>
+              <Field label="Trade licence number (optional)">
+                <input
+                  name="trade_license"
+                  maxLength={120}
+                  defaultValue={val("trade_license")}
                 />
               </Field>
               {!initial.id && (
@@ -455,7 +509,25 @@ export function RecordForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Flat">
+              <Field label="Rental type">
+                <select
+                  value={rentalType}
+                  onChange={(e) => {
+                    const type = e.target.value;
+                    const next = data.units.find(
+                      (u) => u.status === "available" && unitLabel(u) === type,
+                    );
+                    setRentalType(type);
+                    setUnit(next?.id ?? "");
+                    setRent(String(((next?.monthly_rent ?? 0) * 12) / 100));
+                    setParkingIds([]);
+                  }}
+                >
+                  <option value="Flat">Flat</option>
+                  <option value="Shop">Shop</option>
+                </select>
+              </Field>
+              <Field label={rentalType}>
                 <select
                   required
                   name="unit_id"
@@ -473,9 +545,12 @@ export function RecordForm({
                     );
                   }}
                 >
-                  <option value="">Choose a flat</option>
+                  <option value="">Choose a {rentalType.toLowerCase()}</option>
                   {data.units
-                    .filter((u) => u.status === "available")
+                    .filter(
+                      (u) =>
+                        u.status === "available" && unitLabel(u) === rentalType,
+                    )
                     .map((u) => (
                       <option key={u.id} value={u.id}>
                         {
@@ -624,7 +699,7 @@ export function RecordForm({
                   <span>Ends {starts ? annualEnd(starts) : "—"}</span>
                 </div>
                 <div>
-                  <span>Annual flat rent</span>
+                  <span>Annual {rentalType.toLowerCase()} rent</span>
                   <strong>AED {money(Math.round(Number(rent) * 100))}</strong>
                 </div>
                 <div>
@@ -654,15 +729,16 @@ export function RecordForm({
               </div>
               {(!data.units.length || !data.tenants.length) && (
                 <p className="form-note span-2">
-                  Add a{" "}
+                  Add a flat or shop and a tenant before creating an agreement.{" "}
                   <Link onClick={onClose} href="/units">
-                    flat
+                    Manage flats
                   </Link>{" "}
-                  and a{" "}
+                  <Link onClick={onClose} href="/shops">
+                    Manage shops
+                  </Link>{" "}
                   <Link onClick={onClose} href="/tenants">
-                    tenant
+                    Manage tenants
                   </Link>{" "}
-                  before creating an agreement.
                 </p>
               )}
             </>

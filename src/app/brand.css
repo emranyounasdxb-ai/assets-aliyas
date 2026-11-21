@@ -1764,6 +1764,14 @@ body {
 .nav-group-gap {
   height: 16px;
 }
+.unit-rental-history {
+  padding: 24px;
+}
+.unit-rental-history h3 {
+  font-size: 16px;
+  line-height: 24px;
+  margin-bottom: 16px;
+}
 .main-content {
   padding-bottom: 32px;
 }

@@ -120,7 +120,7 @@ export function Dashboard() {
       title: "Portfolio occupancy",
       value: occupancy,
       icon: Key,
-      foot: `${occupied} occupied · ${vacant} vacant flats`,
+      foot: `${occupied} occupied · ${vacant} vacant units`,
       type: "percent",
       className: "",
     },
@@ -161,10 +161,22 @@ export function Dashboard() {
     {
       label: "Flats ready to rent",
       detail: "Available across your properties",
-      count: vacant,
+      count: data.units.filter(
+        (u) => u.category !== "Shop" && unitStatus(data, u) === "Vacant",
+      ).length,
       icon: Key,
       tone: "success",
       href: "/units?status=Vacant",
+    },
+    {
+      label: "Shops ready to rent",
+      detail: "Available on the ground floor",
+      count: data.units.filter(
+        (u) => u.category === "Shop" && unitStatus(data, u) === "Vacant",
+      ).length,
+      icon: Key,
+      tone: "success",
+      href: "/shops?status=Vacant",
     },
   ];
   const shownCheques = chequeView === "overdue" ? overdue : due;
@@ -172,7 +184,7 @@ export function Dashboard() {
     <>
       <PageHeader
         title="Portfolio overview"
-        description={`${data.buildings.length} properties · ${data.units.length} flats · ${data.tenants.length} tenants across your portfolio`}
+        description={`${data.buildings.length} properties · ${data.units.filter((u) => u.category !== "Shop").length} flats · ${data.units.filter((u) => u.category === "Shop").length} shops · ${data.tenants.length} tenants`}
       >
         <span className="date-chip">
           <CalendarBlank size={16} />
@@ -360,7 +372,7 @@ export function Dashboard() {
           <div className="panel-header">
             <SectionHeader
               title="Property performance"
-              description={`${occupied} of ${data.units.length} flats currently occupied`}
+              description={`${occupied} of ${data.units.length} rental units currently occupied`}
             >
               <Link href="/properties" className="text-link">
                 All properties
@@ -389,7 +401,10 @@ export function Dashboard() {
                   <span className="property-mini-text">
                     <strong>{b.name}</strong>
                     <small>
-                      {b.area} · {units.length} flats
+                      {b.area} ·{" "}
+                      {units.filter((u) => u.category !== "Shop").length} flats
+                      · {units.filter((u) => u.category === "Shop").length}{" "}
+                      shops
                     </small>
                   </span>
                   <span className="property-mini-stat">
@@ -405,7 +420,7 @@ export function Dashboard() {
             {!data.buildings.length && (
               <Empty
                 title="Your portfolio starts here"
-                description="Add your first building, then its floors and flats."
+                description="Add your first building, then its floors, flats and shops."
               />
             )}
           </div>
@@ -426,7 +441,7 @@ export function Dashboard() {
                     ledger: "Account entry",
                     deposits: "Security deposit",
                     documents: "Document",
-                    units: "Flat",
+                    units: "Rental unit",
                   } as Record<string, string>
                 )[a.resource_type] ?? "Record";
               return (

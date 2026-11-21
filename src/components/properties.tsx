@@ -14,6 +14,8 @@ import {
 import {
   categories,
   currentLease,
+  unitLabel,
+  dateLabel,
   pendingCheque,
   todayDubai,
   unitStatus,
@@ -133,7 +135,7 @@ export function PropertyCard({ building }: { building: Building }) {
         <div className="property-card-stats">
           <div>
             <strong>{units.length}</strong>
-            <small>Registered flats</small>
+            <small>Registered units</small>
           </div>
           <div>
             <strong>{occupied}</strong>
@@ -153,9 +155,7 @@ export function PropertyCard({ building }: { building: Building }) {
         </div>
         <div className="property-card-footer">
           <span>
-            {units.length
-              ? `${ratio}% occupancy`
-              : "Apartment inventory pending"}
+            {units.length ? `${ratio}% occupancy` : "Unit inventory pending"}
           </span>
           <Link className="text-link" href={`/properties/${building.id}`}>
             View property
@@ -321,6 +321,10 @@ export function PropertyDetail({ id }: { id: string }) {
               <Plus size={18} />
               Add flat
             </Button>
+            <Button onClick={() => openForm("shop", { building_id: id })}>
+              <Plus size={18} />
+              Add shop
+            </Button>
           </>
         )}
       </PageHeader>
@@ -349,22 +353,23 @@ export function PropertyDetail({ id }: { id: string }) {
               <small>Floors</small>
             </div>
             <div>
-              <strong>{units.length}</strong>
+              <strong>
+                {units.filter((u) => u.category !== "Shop").length}
+              </strong>
               <small>Flats</small>
             </div>
             <div>
               <strong>
-                {units.length ? Math.round((occupied / units.length) * 100) : 0}
-                %
+                {units.filter((u) => u.category === "Shop").length}
               </strong>
-              <small>Occupied</small>
+              <small>Shops</small>
             </div>
           </div>
         </div>
       </div>
       <div className="summary-strip">
         <div>
-          <small>Total flats</small>
+          <small>Total rental units</small>
           <strong>{units.length}</strong>
         </div>
         <div>
@@ -441,7 +446,18 @@ export function PropertyDetail({ id }: { id: string }) {
                     </Badge>
                   )}
                   <span>
-                    {units.filter((u) => u.floor_id === f.id).length} flats
+                    {
+                      units.filter(
+                        (u) => u.floor_id === f.id && u.category !== "Shop",
+                      ).length
+                    }{" "}
+                    flats ·{" "}
+                    {
+                      units.filter(
+                        (u) => u.floor_id === f.id && u.category === "Shop",
+                      ).length
+                    }{" "}
+                    shops
                   </span>
                   {manage && (
                     <Button
@@ -474,7 +490,9 @@ export function PropertyDetail({ id }: { id: string }) {
                           onClick={() => setSelected(u)}
                         >
                           <div className="unit-card-head">
-                            <strong>Flat {u.code}</strong>
+                            <strong>
+                              {unitLabel(u)} {u.code}
+                            </strong>
                             <Badge tone={statusTone(status)}>{status}</Badge>
                           </div>
                           <p>
@@ -510,7 +528,9 @@ export function PropertyDetail({ id }: { id: string }) {
                       ? "Parking level. Apartments cannot be added here."
                       : f.purpose === "service"
                         ? "Gym and service area. No apartments on this floor."
-                        : "Apartment details have not been added on this floor yet."}
+                        : f.ordinal === 0
+                          ? "No flats or shops have been entered on this floor."
+                          : "Apartment details have not been added on this floor yet."}
                   </p>
                 )}
                 {f.notes && <p className="floor-notes">{f.notes}</p>}
@@ -555,7 +575,7 @@ export function UnitModal({
   const manage = ["owner", "manager"].includes(data.membership.role);
   return (
     <Modal
-      title={`Flat ${unit.code}`}
+      title={`${unitLabel(unit)} ${unit.code}`}
       description={`${building?.name} · ${data.floors.find((f) => f.id === unit.floor_id)?.name}`}
       wide
       onClose={onClose}
@@ -612,11 +632,11 @@ export function UnitModal({
           <Button
             onClick={() => {
               onClose();
-              openForm("unit", { ...unit });
+              openForm(unit.category === "Shop" ? "shop" : "unit", { ...unit });
             }}
           >
             <PencilSimple size={16} />
-            Edit flat
+            Edit {unitLabel(unit).toLowerCase()}
           </Button>
         )}
         {manage && status === "Vacant" && (
@@ -642,26 +662,81 @@ export function UnitModal({
           </Link>
         )}
       </div>
+      {unit.notes && <p className="modal-message">{unit.notes}</p>}
+      {data.leases.some((l) => l.unit_id === id) && (
+        <section className="unit-rental-history">
+          <h3>Rental history</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agreement / tenant</th>
+                  <th>Term</th>
+                  <th>Annual rent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.leases
+                  .filter((l) => l.unit_id === id)
+                  .sort((a, b) => b.start_date.localeCompare(a.start_date))
+                  .map((l) => (
+                    <tr key={l.id}>
+                      <td>
+                        <Link
+                          href={`/agreements/${l.id}`}
+                          className="text-link"
+                          onClick={onClose}
+                        >
+                          {l.reference}
+                        </Link>
+                        <small>
+                          {data.tenants.find((t) => t.id === l.tenant_id)?.name}
+                        </small>
+                      </td>
+                      <td>
+                        {dateLabel(l.start_date)}
+                        <small>
+                          to {dateLabel(l.end_date)} · {l.status}
+                        </small>
+                      </td>
+                      <td>
+                        <Money value={l.annual_rent} />
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <div style={{ padding: 24, borderTop: "1px solid var(--line)" }}>
         <DocumentPanel
           targetType="unit"
           targetId={id}
-          title="Flat photos & floor plans"
+          title={`${unitLabel(unit)} photos, plans & documents`}
           compact
         />
       </div>
     </Modal>
   );
 }
-export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
+export function Units({
+  initialStatus = "all",
+  shops = false,
+}: {
+  initialStatus?: string;
+  shops?: boolean;
+}) {
   const { data, openForm } = useApp();
+  const label = shops ? "Shop" : "Flat";
+  const inventory = data.units.filter((u) => (u.category === "Shop") === shops);
   const [query, setQuery] = useState("");
   const [building, setBuilding] = useState("all");
   const [status, setStatus] = useState(initialStatus);
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
   const list = useList(
-    data.units,
+    inventory,
     (u) =>
       `${u.code} ${data.buildings.find((b) => b.id === u.building_id)?.name}`
         .toLowerCase()
@@ -672,14 +747,43 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
   );
   return (
     <>
-      <PageHeader title="Flats">
+      <PageHeader title={shops ? "Shops" : "Flats"}>
         {["owner", "manager"].includes(data.membership.role) && (
-          <Button variant="primary" onClick={() => openForm("unit")}>
+          <Button
+            variant="primary"
+            onClick={() => openForm(shops ? "shop" : "unit")}
+          >
             <Plus size={18} />
-            Add flat
+            Add {label.toLowerCase()}
           </Button>
         )}
       </PageHeader>
+      <div className="summary-strip">
+        <div>
+          <small>Registered {shops ? "shops" : "flats"}</small>
+          <strong>{inventory.length}</strong>
+        </div>
+        <div>
+          <small>Occupied</small>
+          <strong>
+            {inventory.filter((u) => unitStatus(data, u) === "Occupied").length}
+          </strong>
+        </div>
+        <div>
+          <small>Vacant</small>
+          <strong>
+            {inventory.filter((u) => unitStatus(data, u) === "Vacant").length}
+          </strong>
+        </div>
+        <div>
+          <small>Monthly asking rent</small>
+          <strong>
+            <Money
+              value={inventory.reduce((sum, u) => sum + u.monthly_rent, 0)}
+            />
+          </strong>
+        </div>
+      </div>
       <div className="toolbar">
         <SearchInput
           value={query}
@@ -687,7 +791,7 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
             setQuery(v);
             list.setPage(1);
           }}
-          placeholder="Search flats or properties…"
+          placeholder={`Search ${shops ? "shops" : "flats"} or properties…`}
         />
         <select
           className="filter-select"
@@ -705,23 +809,25 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
             </option>
           ))}
         </select>
+        {!shops && (
+          <select
+            className="filter-select"
+            aria-label="Filter category"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              list.setPage(1);
+            }}
+          >
+            <option value="all">All categories</option>
+            {categories.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        )}
         <select
           className="filter-select"
-          aria-label="Filter category"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            list.setPage(1);
-          }}
-        >
-          <option value="all">All categories</option>
-          {categories.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          className="filter-select"
-          aria-label="Filter flat status"
+          aria-label={`Filter ${label.toLowerCase()} status`}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
@@ -741,9 +847,9 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
               <table>
                 <thead>
                   <tr>
-                    <th>Flat</th>
+                    <th>{label}</th>
                     <th>Property</th>
-                    <th>Category</th>
+                    <th>{shops ? "Area" : "Category"}</th>
                     <th>Monthly rent</th>
                     <th>Current tenant</th>
                     <th>Status</th>
@@ -757,7 +863,9 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
                     return (
                       <tr key={u.id}>
                         <td>
-                          <strong>Flat {u.code}</strong>
+                          <strong>
+                            {label} {u.code}
+                          </strong>
                           <small>
                             {data.floors.find((f) => f.id === u.floor_id)?.name}
                           </small>
@@ -774,7 +882,7 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
                           </Link>
                         </td>
                         <td>
-                          {u.category}
+                          {!shops && u.category}
                           <small>{u.area_sqft.toLocaleString()} sq ft</small>
                         </td>
                         <td>
@@ -805,7 +913,7 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
                           <Button
                             variant="ghost"
                             className="icon-button"
-                            aria-label={`View flat ${u.code}`}
+                            aria-label={`View ${label.toLowerCase()} ${u.code}`}
                             onClick={() => setSelected(u.id)}
                           >
                             <ArrowRight size={16} />
@@ -821,11 +929,13 @@ export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
           </>
         ) : (
           <Empty
-            title="No flats to show"
+            title={`No ${shops ? "shops" : "flats"} to show`}
             description={
-              data.units.length
-                ? "Adjust your search or filters to find a flat."
-                : "Add a property and its floors, then add your first flat."
+              inventory.length
+                ? `Adjust your search or filters to find a ${label.toLowerCase()}.`
+                : shops
+                  ? "Add shop numbers and rents for each building's ground floor."
+                  : "Add a property and its floors, then add your first flat."
             }
           />
         )}

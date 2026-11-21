@@ -111,6 +111,8 @@ These are proposed requirements, not approved business decisions.
 
 ## Initial workflow
 
+Ground floor shops are also in scope for every building. They need a separate inventory section and apartment/shop reporting, while sharing tenant profiles, private documents, rental accounts, security records, annual agreements and four or six rent cheques. Actual shop counts, numbers and rents will be entered later. See [Ground floor shops](shops.md) for the implemented controls.
+
 1. Register a building, its floors, flats, categories, rent, amenities and property files.
 2. Create a tenant profile and attach the tenant's documents.
 3. Select a vacant flat and enter the proposed agreement dates and financial terms.

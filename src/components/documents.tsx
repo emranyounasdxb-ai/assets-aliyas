@@ -15,6 +15,7 @@ import {
 import {
   dateLabel,
   documentCategories,
+  unitLabel,
   type DocumentRecord,
 } from "@/lib/domain";
 import { useApp } from "./provider";
@@ -64,7 +65,7 @@ export function UploadModal({
         : t === "unit"
           ? data.units.map((u) => ({
               id: u.id,
-              name: `${data.buildings.find((b) => b.id === u.building_id)?.code} · Flat ${u.code}`,
+              name: `${data.buildings.find((b) => b.id === u.building_id)?.code} · ${unitLabel(u)} ${u.code}`,
             }))
           : t === "lease"
             ? data.leases.map((l) => ({ id: l.id, name: l.reference }))
@@ -172,7 +173,7 @@ export function UploadModal({
                           tenant: "Tenant",
                           building: "Property",
                           floor: "Floor",
-                          unit: "Flat",
+                          unit: "Flat or shop",
                           lease: "Agreement",
                         }[t]
                       }
@@ -454,7 +455,7 @@ export function Documents() {
         : doc.target_type === "lease"
           ? data.leases.find((l) => l.id === doc.target_id)?.reference
           : doc.target_type === "unit"
-            ? `Flat ${data.units.find((u) => u.id === doc.target_id)?.code}`
+            ? `${unitLabel(data.units.find((u) => u.id === doc.target_id))} ${data.units.find((u) => u.id === doc.target_id)?.code}`
             : data.floors.find((f) => f.id === doc.target_id)?.name;
   }
   const list = useList(

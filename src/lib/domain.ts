@@ -1,5 +1,5 @@
 export type Role = "owner" | "manager" | "accountant" | "viewer";
-export type Category = "Studio" | "1 BHK" | "2 BHK" | "3 BHK";
+export type Category = "Studio" | "1 BHK" | "2 BHK" | "3 BHK" | "Shop";
 export interface Workspace {
   id: string;
   name: string;
@@ -47,6 +47,7 @@ export interface Unit {
   area_sqft: number;
   status: "available" | "maintenance";
   amenities: string[];
+  notes: string;
 }
 export interface Tenant {
   id: string;
@@ -55,6 +56,8 @@ export interface Tenant {
   email: string;
   phone: string;
   nationality: string;
+  company_name: string;
+  trade_license: string;
   notes: string;
   created_at: string;
 }
@@ -189,7 +192,10 @@ export interface AppData {
   readNotifications: string[];
   activities: Activity[];
 }
-export const categories: Category[] = ["Studio", "1 BHK", "2 BHK", "3 BHK"];
+export const categories = ["Studio", "1 BHK", "2 BHK", "3 BHK"] as const;
+export function unitLabel(unit?: Pick<Unit, "category">) {
+  return unit?.category === "Shop" ? "Shop" : "Flat";
+}
 export function annualParkingCharge(
   lot: Pick<ParkingLot, "rate_amount" | "rate_period">,
 ) {
@@ -222,6 +228,7 @@ export const documentCategories = [
   "Passport",
   "Emirates ID",
   "Bank statement",
+  "Trade licence",
   "Contract",
   "Other",
 ];

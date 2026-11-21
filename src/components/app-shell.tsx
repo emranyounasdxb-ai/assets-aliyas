@@ -20,6 +20,7 @@ import {
   Question,
   SignOut,
   SquaresFour,
+  Storefront,
   Users,
   Wallet,
   X,
@@ -28,6 +29,7 @@ import {
   daysUntil,
   dateLabel,
   visibleNotifications,
+  unitLabel,
   type AppData,
 } from "@/lib/domain";
 import { AppProvider, useApp } from "./provider";
@@ -37,6 +39,7 @@ const mainNav = [
   { href: "/", label: "Overview", icon: SquaresFour },
   { href: "/properties", label: "Properties", icon: Buildings },
   { href: "/units", label: "Flats", icon: Key },
+  { href: "/shops", label: "Shops", icon: Storefront },
   { href: "/parking", label: "Parking", icon: Car },
   { href: "/tenants", label: "Tenants", icon: Users },
 ];
@@ -128,10 +131,10 @@ function Shell({ children }: { children: ReactNode }) {
     })),
     ...data.units.map((u) => ({
       id: u.id,
-      title: `Flat ${u.code}`,
+      title: `${unitLabel(u)} ${u.code}`,
       detail: `${data.buildings.find((b) => b.id === u.building_id)?.name} · ${u.category}`,
       href: `/properties/${u.building_id}`,
-      icon: Key,
+      icon: u.category === "Shop" ? Storefront : Key,
     })),
     ...data.leases.map((l) => ({
       id: l.id,
@@ -363,7 +366,7 @@ function Shell({ children }: { children: ReactNode }) {
             <SearchInput
               value={query}
               onChange={setQuery}
-              placeholder="Search names, flat numbers or references…"
+              placeholder="Search names, unit numbers or references…"
             />
             <div className="search-results">
               {results.length ? (
@@ -478,7 +481,7 @@ function Shell({ children }: { children: ReactNode }) {
               [
                 "01",
                 "Add your properties",
-                "Create a building and its floors, then add flats with their rent and amenities.",
+                "Create a building and its floors, then add flats or ground floor shops with their rent and amenities.",
               ],
               [
                 "02",
@@ -488,7 +491,7 @@ function Shell({ children }: { children: ReactNode }) {
               [
                 "03",
                 "Create an agreement",
-                "Link a tenant to a flat and set annual rent with four or six cheques.",
+                "Link a tenant to a flat or shop and set annual rent with four or six cheques.",
               ],
               [
                 "04",

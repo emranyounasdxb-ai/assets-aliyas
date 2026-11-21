@@ -7,6 +7,7 @@ import {
   dateLabel,
   parkingAvailable,
   todayDubai,
+  unitLabel,
   type AppData,
   type Lease,
 } from "@/lib/domain";
@@ -84,7 +85,7 @@ export function ParkingAssignmentForm({
   return (
     <Modal
       title="Allocate parking"
-      description="Choose spaces in the apartment building for the full agreement term."
+      description="Choose spaces in the same building for the full agreement term."
       onClose={pending ? () => {} : onClose}
       wide
     >
@@ -103,7 +104,8 @@ export function ParkingAssignmentForm({
               {eligible.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.reference} ·{" "}
-                  {data.tenants.find((t) => t.id === l.tenant_id)?.name} · Flat{" "}
+                  {data.tenants.find((t) => t.id === l.tenant_id)?.name} ·{" "}
+                  {unitLabel(data.units.find((u) => u.id === l.unit_id))}{" "}
                   {data.units.find((u) => u.id === l.unit_id)?.code}
                 </option>
               ))}
@@ -189,7 +191,7 @@ export function ParkingAssignmentForm({
             </div>
             <p>
               {lease
-                ? `${lease.installments} rent cheques will include the combined flat and parking charges.`
+                ? `${lease.installments} rent cheques will include the combined rent and parking charges.`
                 : "Choose an agreement with scheduled cheques. Parking changes are locked after cheques are received or processed."}
             </p>
           </div>

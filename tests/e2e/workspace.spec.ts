@@ -946,6 +946,226 @@ test.describe.serial("Property management workspace", () => {
       page.getByText("Unsigned draft", { exact: true }),
     ).toBeVisible();
   });
+  test("manages ground floor shops with commercial tenant details, annual cheques and separate reports", async () => {
+    const property = await checkedAction("building", {
+      name: "Verification Shops",
+      code: "QA-SHOPS",
+      area: "Verification area",
+      floor_count: 1,
+    });
+    const shopBuilding = property.result;
+    const levels = (await readRows("floors")).filter(
+      (f) => f.building_id === shopBuilding,
+    );
+    const ground = levels.find((f) => f.ordinal === 0);
+    const upper = levels.find((f) => f.ordinal === 1);
+    await page.goto(`${origin}/shops`);
+    await page.getByRole("button", { name: "Add shop", exact: true }).click();
+    const form = page.getByRole("dialog");
+    await form
+      .getByLabel("Property", { exact: true })
+      .selectOption(shopBuilding);
+    await expect(form.getByLabel("Floor", { exact: true })).toHaveValue(
+      ground.id,
+    );
+    await expect(
+      form.getByLabel("Floor", { exact: true }).locator("option"),
+    ).toHaveCount(2);
+    await form.getByLabel("Shop number", { exact: true }).fill("S-QA-1");
+    await form.getByLabel("Monthly asking rent (AED)").fill("4000");
+    await form.getByLabel("Area (sq ft)").fill("1250");
+    await form
+      .getByLabel("Notes", { exact: true })
+      .fill("Fictional shop for verification only");
+    await form.getByRole("button", { name: "Save shop", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "View shop S-QA-1" }),
+    ).toBeVisible();
+    const shop = (await readRows("units")).find(
+      (u) => u.building_id === shopBuilding && u.category === "Shop",
+    );
+    const values = {
+      building_id: shopBuilding,
+      floor_id: ground.id,
+      code: "S-QA-1",
+      monthly_rent: "4000",
+    };
+    expect((await action("shop", values)).status()).toBe(400);
+    await checkedAction("unit", { ...values, category: "Studio" });
+    const invalidFloor = await action("shop", {
+      ...values,
+      code: "S-UPPER",
+      floor_id: upper.id,
+    });
+    expect(invalidFloor.status()).toBe(400);
+    expect((await invalidFloor.json()).error).toContain("ground floor");
+    const directInsert = await admin.from("units").insert({
+      ...values,
+      workspace_id: workspace,
+      code: "S-BYPASS",
+      category: "Shop",
+      floor_id: upper.id,
+      monthly_rent: 400000,
+    });
+    expect(directInsert.error?.message).toContain("ground floor");
+    const changedGround = await action("floor", {
+      id: ground.id,
+      building_id: shopBuilding,
+      name: "Ground floor",
+      ordinal: 3,
+    });
+    expect(changedGround.status()).toBe(400);
+    await checkedAction("shop", {
+      ...values,
+      id: shop.id,
+      notes: "Edited verification shop",
+      monthly_rent: "4100",
+    });
+    const company = await checkedAction("tenant", {
+      name: "Verification Shop Contact",
+      phone: "+971500000001",
+      company_name: "Verification Shop Company",
+      trade_license: "QA-LICENCE",
+      opening: "123.45",
+    });
+    const shopTenant = company.result;
+    await page.goto(`${origin}/tenants/${shopTenant}`);
+    await expect(
+      page.getByText("Verification Shop Company", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("QA-LICENCE", { exact: true })).toBeVisible();
+    await page.goto(`${origin}/shops`);
+    await page.getByRole("button", { name: "View shop S-QA-1" }).click();
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByText("Edited verification shop", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    const agreementForm = page.getByRole("dialog");
+    await expect(
+      agreementForm.getByLabel("Rental type", { exact: true }),
+    ).toHaveValue("Shop");
+    await expect(agreementForm.getByLabel("Shop", { exact: true })).toHaveValue(
+      shop.id,
+    );
+    await agreementForm
+      .getByLabel("Tenant", { exact: true })
+      .selectOption(shopTenant);
+    await agreementForm
+      .getByLabel("Agreement reference")
+      .fill("QA-SHOP-ANNUAL");
+    await agreementForm.getByLabel("Annual agreed rent (AED)").fill("48000.37");
+    await agreementForm.getByLabel("Rent cheques").selectOption("6");
+    await agreementForm
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    await expect(agreementForm).toHaveCount(0);
+    const shopLease = (await readRows("leases")).find(
+      (l) => l.reference === "QA-SHOP-ANNUAL",
+    );
+    const checks = (await readRows("cheques")).filter(
+      (c) => c.lease_id === shopLease.id,
+    );
+    expect(checks).toHaveLength(6);
+    expect(checks.reduce((sum, c) => sum + c.amount, 0)).toBe(4800037);
+    const overlap = await action("lease", {
+      tenant_id: shopTenant,
+      unit_id: shop.id,
+      start_date: todayDubai(),
+      annual_rent: "48000",
+      installments: 4,
+      reference: "QA-SHOP-OVERLAP",
+    });
+    expect(overlap.status()).toBe(400);
+    const move = await action("shop", {
+      ...values,
+      id: shop.id,
+      building_id: building,
+      floor_id: (await readRows("floors")).find(
+        (f) => f.building_id === building && f.ordinal === 0,
+      ).id,
+    });
+    expect(move.status()).toBe(400);
+    const cleared = checks.find((c) => c.due_date === todayDubai());
+    await checkedAction("cheque", {
+      id: cleared.id,
+      number: "QA-SHOP-PAID",
+      status: "cleared",
+      bank: "Verification Bank",
+      on_date: todayDubai(),
+    });
+    await checkedAction("cheque", {
+      id: cleared.id,
+      number: "QA-SHOP-PAID",
+      status: "cleared",
+      bank: "Verification Bank",
+      on_date: todayDubai(),
+    });
+    const ledger = (await readRows("ledger")).filter(
+      (e) => e.tenant_id === shopTenant,
+    );
+    expect(ledger.filter((e) => e.cheque_id === cleared.id)).toHaveLength(1);
+    expect(ledger.reduce((sum, e) => sum + e.amount, 0)).toBe(
+      12345 + 4800037 - cleared.amount,
+    );
+    const pdf = Buffer.from(
+      "%PDF-1.4\n% Fictional trade licence verification\n%%EOF",
+    );
+    const upload = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: {
+          name: "verification-trade-licence.pdf",
+          mimeType: "application/pdf",
+          buffer: pdf,
+        },
+        target_type: "tenant",
+        target_id: shopTenant,
+        category: "Trade licence",
+        request_key: randomUUID(),
+      },
+    });
+    expect(upload.ok(), await upload.text()).toBe(true);
+    const file = await context.request.get(
+      `${origin}/api/documents/${(await upload.json()).id}/file`,
+    );
+    expect(await file.body()).toEqual(pdf);
+    await page.goto(`${origin}/agreements/${shopLease.id}`);
+    await expect(
+      page.getByText("Shop S-QA-1", { exact: false }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Verification Shop Company", { exact: true }),
+    ).toBeVisible();
+    await page.goto(`${origin}/units`);
+    await expect(
+      page.getByRole("button", { name: "View shop S-QA-1" }),
+    ).toHaveCount(0);
+    await page.goto(`${origin}/reports`);
+    await page
+      .getByLabel("Property", { exact: true })
+      .selectOption(shopBuilding);
+    await page.getByLabel("Rental type", { exact: true }).selectOption("Shop");
+    const reportRow = page.getByRole("row").filter({
+      has: page.getByRole("link", {
+        name: "Verification Shops",
+        exact: true,
+      }),
+    });
+    await expect(reportRow.locator("td").nth(1)).toHaveText("0");
+    await expect(reportRow.locator("td").nth(2)).toHaveText("1");
+    await expect(reportRow.locator("td").nth(4)).toHaveText("1");
+    await expect(reportRow.locator("td").last()).toContainText("8,000.06");
+    await page.getByLabel("Rental type", { exact: true }).selectOption("Flat");
+    await expect(reportRow.locator("td").nth(1)).toHaveText("1");
+    await expect(reportRow.locator("td").nth(2)).toHaveText("0");
+    await expect(reportRow.locator("td").last()).toContainText("0");
+  });
   test("keeps the mobile layout, keyboard focus and reduced motion usable", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -978,6 +1198,7 @@ test.describe.serial("Property management workspace", () => {
     for (const route of [
       "properties",
       "units",
+      "shops",
       "tenants",
       "agreements",
       "cheques",

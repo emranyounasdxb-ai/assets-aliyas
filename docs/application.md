@@ -23,6 +23,8 @@ Create an empty workspace from Settings to try entering a separate portfolio. A 
 - Dashboard with database-derived property totals, occupancy, rental collections, upcoming cheques and activity.
 - Property creation and editing, automatically created ground and upper floors, additional floors, and individual flat creation and editing.
 - Studio, 1 BHK, 2 BHK and 3 BHK categories, monthly asking rent, amenities, area and maintenance availability.
+- Separate Shops module for ground floor commercial units, with editable numbers, asking rent, area, amenities, notes, maintenance availability, tenant links and rental history. Flats and shops share agreements, accounts, cheque reminders and private document storage.
+- Optional company name and trade licence number on tenant profiles, plus private trade licence uploads. Annual shop agreements use the same four or six cheque workflow as flats.
 - Tenant creation and editing, contact details, opening balances and rental history.
 - Annual agreement creation with 1, 2, 3, 4, 6 or 12 cheques. Four and six are the main supported business cases.
 - Agreement detail with a printable unsigned internal summary and private signed-contract uploads. The summary is not an approved Ajman tenancy contract template.
@@ -48,6 +50,9 @@ These conventions make the application reviewable while the remaining business q
 - Overdue cheque amounts and total tenant balances are different measures. An annual rent balance includes future installments.
 - Agreement date ranges for the same flat cannot overlap, including concurrent creation requests. The unit row is locked while checking and saving.
 - Flat occupancy uses active agreement dates for today. Future agreements show as reserved; expired agreements stop counting as occupied.
+- Shop occupancy follows the same dates. Reports filter flats and shops separately or combine them, with separate counts per building. Shop numbers have their own namespace, so a shop and flat may share a number in the same building.
+- Shops must remain on ground level (floor ordinal zero). Rental units cannot use parking or service levels. A unit with agreement history cannot move buildings/floors or change between flat and shop, preserving the linked rental history.
+- The system does not invent shop counts, numbers or rents, and does not automatically calculate VAT or other unconfirmed commercial charges.
 - Closing an agreement is supported at or after its term ends. Early termination and prorated settlement need agreed business rules before implementation.
 
 ## Reminders

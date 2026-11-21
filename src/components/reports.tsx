@@ -14,19 +14,25 @@ import {
   exportCsv,
   todayDubai,
   unitStatus,
+  unitLabel,
 } from "@/lib/domain";
 import { useApp } from "./provider";
 import { Badge, Button, Money, PageHeader, SectionHeader } from "./ui";
 export function Reports() {
   const { data } = useApp();
   const [building, setBuilding] = useState("all");
+  const [rentalType, setRentalType] = useState("all");
   const [from, setFrom] = useState(`${todayDubai().slice(0, 4)}-01-01`);
   const [to, setTo] = useState(todayDubai());
   const properties = data.buildings.filter(
     (b) => building === "all" || b.id === building,
   );
   const ids = new Set(properties.map((b) => b.id));
-  const units = data.units.filter((u) => ids.has(u.building_id));
+  const units = data.units.filter(
+    (u) =>
+      ids.has(u.building_id) &&
+      (rentalType === "all" || unitLabel(u) === rentalType),
+  );
   const unitIds = new Set(units.map((u) => u.id));
   const leases = data.leases.filter((l) => unitIds.has(l.unit_id));
   const leaseIds = new Set(leases.map((l) => l.id));
@@ -35,7 +41,8 @@ export function Reports() {
       e.kind === "payment" &&
       e.entry_date >= from &&
       e.entry_date <= to &&
-      (building === "all" || (!!e.lease_id && leaseIds.has(e.lease_id))),
+      ((building === "all" && rentalType === "all") ||
+        (!!e.lease_id && leaseIds.has(e.lease_id))),
   );
   const rows = properties.map((b) => {
     const bu = units.filter((u) => u.building_id === b.id);
@@ -50,6 +57,8 @@ export function Reports() {
     return {
       building: b,
       units: bu.length,
+      flats: bu.filter((u) => u.category !== "Shop").length,
+      shops: bu.filter((u) => u.category === "Shop").length,
       occupied: occ,
       vacant,
       reserved: bu.filter((u) => unitStatus(data, u) === "Reserved").length,
@@ -65,7 +74,9 @@ export function Reports() {
       [
         "Property",
         "Area",
-        "Total flats",
+        "Flats",
+        "Shops",
+        "Total rental units",
         "Occupied",
         "Vacant",
         "Reserved",
@@ -75,6 +86,8 @@ export function Reports() {
       ...rows.map((r) => [
         r.building.name,
         r.building.area,
+        r.flats,
+        r.shops,
         r.units,
         r.occupied,
         r.vacant,
@@ -142,6 +155,19 @@ export function Reports() {
             </option>
           ))}
         </select>
+        <label className="filter-label" htmlFor="report-rental-type">
+          Rental type
+        </label>
+        <select
+          id="report-rental-type"
+          className="filter-select"
+          value={rentalType}
+          onChange={(e) => setRentalType(e.target.value)}
+        >
+          <option value="all">Flats & shops</option>
+          <option value="Flat">Flats only</option>
+          <option value="Shop">Shops only</option>
+        </select>
         <label className="filter-label" htmlFor="report-from">
           Collections from
         </label>
@@ -168,7 +194,7 @@ export function Reports() {
       </div>
       <div className="summary-strip">
         <div>
-          <small>Flats in this view</small>
+          <small>Rental units in this view</small>
           <strong>{units.length}</strong>
         </div>
         <div>
@@ -195,7 +221,7 @@ export function Reports() {
           <Buildings size={25} />
           <h3>Property occupancy</h3>
           <p>
-            Total flats, occupied, vacant and unavailable spaces for every
+            Flats, shops, occupied, vacant and unavailable units for every
             building.
           </p>
           <Button onClick={occupancyExport}>
@@ -239,7 +265,9 @@ export function Reports() {
             <thead>
               <tr>
                 <th>Property</th>
-                <th>Total flats</th>
+                <th>Flats</th>
+                <th>Shops</th>
+                <th>Total units</th>
                 <th>Occupied</th>
                 <th>Vacant</th>
                 <th>Other</th>
@@ -259,6 +287,8 @@ export function Reports() {
                     </Link>
                     <small>{r.building.area}</small>
                   </td>
+                  <td>{r.flats}</td>
+                  <td>{r.shops}</td>
                   <td>{r.units}</td>
                   <td>{r.occupied}</td>
                   <td>{r.vacant}</td>
@@ -281,8 +311,8 @@ export function Reports() {
         </div>
         <div className="report-note">
           Occupancy uses current agreement dates. Other includes reserved and
-          maintenance flats. Security is excluded from rental collections.
-          {building === "all" && unallocated > 0 && (
+          maintenance units. Security is excluded from rental collections.
+          {building === "all" && rentalType === "all" && unallocated > 0 && (
             <>
               {" "}
               Account payments not linked to one agreement:{" "}
@@ -290,7 +320,7 @@ export function Reports() {
               total.
             </>
           )}
-          {building !== "all" && (
+          {(building !== "all" || rentalType !== "all") && (
             <>
               {" "}
               Account payments without an agreement are excluded from property

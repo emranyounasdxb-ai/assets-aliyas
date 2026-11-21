@@ -8,7 +8,7 @@ import {
   Plus,
   ShieldCheck,
 } from "@phosphor-icons/react";
-import { accountBalance, dateLabel, todayDubai } from "@/lib/domain";
+import { accountBalance, dateLabel, todayDubai, unitLabel } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
   Avatar,
@@ -43,7 +43,7 @@ export function Tenants() {
   const list = useList(
     data.tenants,
     (t) =>
-      `${t.name} ${t.email} ${t.phone}`
+      `${t.name} ${t.email} ${t.phone} ${t.company_name} ${t.trade_license}`
         .toLowerCase()
         .includes(query.toLowerCase()) &&
       (filter === "all" ||
@@ -93,7 +93,7 @@ export function Tenants() {
                   <tr>
                     <th>Tenant</th>
                     <th>Contact</th>
-                    <th>Property / Flat</th>
+                    <th>Property / Unit</th>
                     <th>Account balance</th>
                     <th>Status</th>
                     <th />
@@ -137,7 +137,7 @@ export function Tenants() {
                                 }
                               </strong>
                               <small>
-                                Flat {u.code} · {u.category}
+                                {unitLabel(u)} {u.code} · {u.category}
                               </small>
                             </>
                           ) : (
@@ -184,7 +184,7 @@ export function Tenants() {
             description={
               data.tenants.length
                 ? "Try a different name or filter."
-                : "Create a tenant profile, then link it to a flat with an agreement."
+                : "Create a tenant profile, then link it to a flat or shop with an agreement."
             }
           />
         )}
@@ -306,6 +306,18 @@ export function TenantDetail({ id }: { id: string }) {
                   <small>Phone number</small>
                   <strong>{tenant.phone}</strong>
                 </div>
+                {tenant.company_name && (
+                  <div>
+                    <small>Company name</small>
+                    <strong>{tenant.company_name}</strong>
+                  </div>
+                )}
+                {tenant.trade_license && (
+                  <div>
+                    <small>Trade licence</small>
+                    <strong>{tenant.trade_license}</strong>
+                  </div>
+                )}
                 {tenant.notes && (
                   <div className="span-2">
                     <small>Notes</small>
@@ -366,7 +378,7 @@ export function TenantDetail({ id }: { id: string }) {
                     <thead>
                       <tr>
                         <th>Agreement</th>
-                        <th>Property / Flat</th>
+                        <th>Property / Unit</th>
                         <th>Annual rent</th>
                         <th>Dates</th>
                         <th />
@@ -387,7 +399,9 @@ export function TenantDetail({ id }: { id: string }) {
                                   (b) => b.id === u?.building_id,
                                 )?.name
                               }
-                              <small>Flat {u?.code}</small>
+                              <small>
+                                {unitLabel(u)} {u?.code}
+                              </small>
                             </td>
                             <td>
                               <Money value={l.annual_rent} />
@@ -414,7 +428,7 @@ export function TenantDetail({ id }: { id: string }) {
               ) : (
                 <Empty
                   title="No agreements"
-                  description="Create an agreement to link this tenant to a flat."
+                  description="Create an agreement to link this tenant to a flat or shop."
                 />
               )}
             </section>

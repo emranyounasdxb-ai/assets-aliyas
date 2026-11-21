@@ -153,7 +153,8 @@ export async function POST(request: Request) {
               .single();
         break;
       }
-      case "unit": {
+      case "unit":
+      case "shop": {
         requireRole(member);
         const v = z
           .object({
@@ -161,11 +162,15 @@ export async function POST(request: Request) {
             building_id: uuid,
             floor_id: uuid,
             code: text(30),
-            category: z.enum(categories),
+            category:
+              body.action === "shop"
+                ? z.literal("Shop").default("Shop")
+                : z.enum(categories),
             monthly_rent: amount,
             area_sqft: z.coerce.number().int().min(0).max(1000000).default(0),
             status: z.enum(["available", "maintenance"]).default("available"),
             amenities,
+            notes: optionalText(2000),
           })
           .parse(p);
         const { id, ...fields } = v;
@@ -193,6 +198,8 @@ export async function POST(request: Request) {
             email: z.union([z.email().max(180), z.literal("")]).default(""),
             phone: text(40),
             nationality: optionalText(80),
+            company_name: optionalText(160),
+            trade_license: optionalText(120),
             notes: optionalText(2000),
             opening: signedAmount.default(0),
           })
