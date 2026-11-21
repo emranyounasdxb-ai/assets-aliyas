@@ -11,6 +11,7 @@ Working local property and rental management application with authenticated work
 Open http://127.0.0.1:3200 and select **Explore demo workspace**. Demo properties and tenants are fictional and clearly labelled. Create an empty workspace from Settings to enter a separate portfolio.
 
 - [Application workflows and operating rules](docs/application.md)
+- [Brand design and paid parking](docs/design-and-parking.md)
 - [Initial requirements and open questions](docs/requirements.md)
 - [Selected tools and development setup](docs/development-setup.md)
 

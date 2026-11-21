@@ -24,6 +24,7 @@ export interface Building {
   amenities: string[];
   notes: string;
   color: string;
+  declared_levels: number | null;
   created_at: string;
 }
 export interface Floor {
@@ -32,6 +33,8 @@ export interface Floor {
   building_id: string;
   name: string;
   ordinal: number;
+  purpose: "unspecified" | "residential" | "parking" | "service";
+  notes: string;
 }
 export interface Unit {
   id: string;
@@ -95,7 +98,7 @@ export interface LedgerEntry {
   tenant_id: string;
   lease_id: string | null;
   cheque_id: string | null;
-  kind: "opening" | "rent" | "payment" | "adjustment";
+  kind: "opening" | "rent" | "parking" | "payment" | "adjustment";
   amount: number;
   description: string;
   entry_date: string;
@@ -109,6 +112,32 @@ export interface Deposit {
   status: "held" | "returned";
   received_on: string;
   returned_on: string | null;
+}
+export interface ParkingLot {
+  id: string;
+  workspace_id: string;
+  building_id: string;
+  floor_id: string | null;
+  number: string;
+  status: "available" | "blocked";
+  rate_amount: number | null;
+  rate_period: "monthly" | "yearly" | null;
+  notes: string;
+}
+export interface ParkingAllocation {
+  id: string;
+  workspace_id: string;
+  lot_id: string;
+  lease_id: string;
+  tenant_id: string;
+  start_date: string;
+  end_date: string;
+  status: "active" | "cancelled";
+  lot_label: string;
+  property_label: string;
+  rate_amount: number;
+  rate_period: "monthly" | "yearly";
+  annual_charge: number;
 }
 export interface DocumentRecord {
   id: string;
@@ -153,12 +182,40 @@ export interface AppData {
   cheques: Cheque[];
   ledger: LedgerEntry[];
   deposits: Deposit[];
+  parkingLots: ParkingLot[];
+  parkingAllocations: ParkingAllocation[];
   documents: DocumentRecord[];
   notifications: Notification[];
   readNotifications: string[];
   activities: Activity[];
 }
 export const categories: Category[] = ["Studio", "1 BHK", "2 BHK", "3 BHK"];
+export function annualParkingCharge(
+  lot: Pick<ParkingLot, "rate_amount" | "rate_period">,
+) {
+  return lot.rate_amount == null
+    ? 0
+    : lot.rate_period === "monthly"
+      ? lot.rate_amount * 12
+      : lot.rate_amount;
+}
+export function parkingAvailable(
+  allocations: ParkingAllocation[],
+  lot: ParkingLot,
+  starts: string,
+  ends: string,
+) {
+  return (
+    lot.status === "available" &&
+    !allocations.some(
+      (a) =>
+        a.lot_id === lot.id &&
+        a.status === "active" &&
+        a.start_date <= ends &&
+        a.end_date >= starts,
+    )
+  );
+}
 export const documentCategories = [
   "Photo",
   "Floor plan",

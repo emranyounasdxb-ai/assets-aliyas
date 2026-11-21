@@ -73,8 +73,8 @@ export function Settings() {
   return (
     <>
       <PageHeader
-        eyebrow="YOUR WORKSPACE, YOUR WAY"
-        title="A few things about your space."
+        eyebrow="Workspace administration"
+        title="Settings"
         description="Company details, access and the workspace you are managing."
       />
       <div className="settings-layout">

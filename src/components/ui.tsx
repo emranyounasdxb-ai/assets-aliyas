@@ -41,6 +41,57 @@ export function Badge({
 }) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
+export function Tabs({
+  id,
+  value,
+  onChange,
+  items,
+  label,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  items: { value: string; label: string; count?: number }[];
+  label: string;
+}) {
+  return (
+    <div className="detail-tabs" role="tablist" aria-label={label}>
+      {items.map((item, index) => (
+        <button
+          key={item.value}
+          type="button"
+          role="tab"
+          id={`${id}-tab-${item.value}`}
+          aria-controls={`${id}-panel-${item.value}`}
+          aria-selected={value === item.value}
+          tabIndex={value === item.value ? 0 : -1}
+          onClick={() => onChange(item.value)}
+          onKeyDown={(event) => {
+            const next =
+              event.key === "ArrowRight"
+                ? (index + 1) % items.length
+                : event.key === "ArrowLeft"
+                  ? (index - 1 + items.length) % items.length
+                  : event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? items.length - 1
+                      : -1;
+            if (next < 0) return;
+            event.preventDefault();
+            onChange(items[next].value);
+            event.currentTarget.parentElement
+              ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+              [next]?.focus();
+          }}
+        >
+          {item.label}
+          {item.count !== undefined && <span>{item.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
 export function Money({
   value,
   compact = false,
@@ -54,7 +105,7 @@ export function Money({
       {new Intl.NumberFormat("en-AE", {
         maximumFractionDigits: value % 100 ? 2 : 0,
         notation: compact ? "compact" : "standard",
-      }).format(value / 100)}
+      }).format(value === 0 ? 0 : value / 100)}
     </span>
   );
 }

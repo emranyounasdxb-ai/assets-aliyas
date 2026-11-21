@@ -105,7 +105,7 @@ Verified on 21 November 2026:
 
 - Node.js and all direct package versions match the pinned manifest.
 - The complete application production build passed with TypeScript 7, React and Tailwind.
-- Ten domain and local preview unit tests and twelve browser workflow tests passed against the optimized local application.
+- Twelve domain and local preview unit tests and sixteen browser workflow tests passed against the optimized local application.
 - Browser tests verified original image preservation, private WebP previews, scanned PDF uploads, document versions, access restrictions and uploads larger than 10 MB.
 - The database pagination test verified complete results beyond the 1,000-row API page size.
 - Encrypted database and file-storage backup creation, decryption and archive-format verification passed. A full restoration drill remains deployment work.

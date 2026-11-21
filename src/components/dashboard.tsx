@@ -3,17 +3,18 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
-  ArrowUpRight,
-  Buildings,
   CalendarBlank,
   CheckCircle,
+  Clock,
   FileText,
   Key,
   Plus,
+  Receipt,
+  WarningCircle,
   Wallet,
 } from "@phosphor-icons/react";
 import {
-  currentLease,
+  accountBalance,
   dateLabel,
   daysUntil,
   money,
@@ -22,43 +23,63 @@ import {
   unitStatus,
 } from "@/lib/domain";
 import { useApp } from "./provider";
-import { Badge, Button, Empty, Money, PageHeader, SectionHeader } from "./ui";
-import { BuildingArt } from "./building-art";
+import { Button, Empty, Money, PageHeader, SectionHeader } from "./ui";
+import { ChequeTable } from "./accounts";
 export function Dashboard() {
   const { data, openForm } = useApp();
   const today = todayDubai();
   const [period, setPeriod] = useState(6);
+  const [chequeView, setChequeView] = useState("upcoming");
   const occupied = data.units.filter(
     (u) => unitStatus(data, u) === "Occupied",
   ).length;
   const vacant = data.units.filter(
     (u) => unitStatus(data, u) === "Vacant",
   ).length;
-  const other = data.units.length - occupied - vacant;
   const occupancy = data.units.length
     ? (occupied / data.units.length) * 100
     : 0;
-  const due = data.cheques
-    .filter(
-      (c) =>
-        pendingCheque(c) &&
-        daysUntil(c.due_date) <= 7 &&
-        daysUntil(c.due_date) >= 0,
-    )
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const upcoming = data.cheques
+  const pending = data.cheques
     .filter(pendingCheque)
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const due = pending.filter(
+    (c) => daysUntil(c.due_date) >= 0 && daysUntil(c.due_date) <= 7,
+  );
+  const overdue = pending.filter((c) => daysUntil(c.due_date) < 0);
+  const renewals = data.leases.filter(
+    (l) =>
+      l.status === "active" &&
+      l.start_date <= today &&
+      daysUntil(l.end_date) >= 0 &&
+      daysUntil(l.end_date) <= 30,
+  );
+  const monthlyCollected = -data.ledger
+    .filter(
+      (e) =>
+        e.kind === "payment" &&
+        e.entry_date.startsWith(today.slice(0, 7)) &&
+        e.entry_date <= today,
+    )
+    .reduce((s, e) => s + e.amount, 0);
+  const outstanding = data.tenants.reduce(
+    (s, t) => s + Math.max(0, accountBalance(data.ledger, t.id)),
+    0,
+  );
   const monthStart = new Date(`${today.slice(0, 7)}-01T12:00:00Z`);
   const series = Array.from({ length: period }, (_, i) => {
-    const d = new Date(monthStart);
-    d.setUTCMonth(d.getUTCMonth() - period + 1 + i);
-    const month = d.toISOString().slice(0, 7);
+    const date = new Date(monthStart);
+    date.setUTCMonth(date.getUTCMonth() - period + 1 + i);
+    const month = date.toISOString().slice(0, 7);
     return {
       month,
-      label: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(d),
+      label: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date),
       collected: -data.ledger
-        .filter((e) => e.kind === "payment" && e.entry_date.startsWith(month))
+        .filter(
+          (e) =>
+            e.kind === "payment" &&
+            e.entry_date.startsWith(month) &&
+            e.entry_date <= today,
+        )
         .reduce((s, e) => s + e.amount, 0),
       expected: data.cheques
         .filter(
@@ -70,95 +91,136 @@ export function Dashboard() {
         .reduce((s, c) => s + c.amount, 0),
     };
   });
-  const total = series.reduce((s, m) => s + m.collected, 0);
   const max = Math.max(
     10000,
     ...series.flatMap((m) => [m.collected, m.expected]),
   );
+  const total = series.reduce((s, m) => s + m.collected, 0);
+  const finance = ["owner", "manager", "accountant"].includes(
+    data.membership.role,
+  );
   const stats = [
     {
-      title: "Total properties",
-      value: String(data.buildings.length),
-      icon: Buildings,
-      foot: `${data.units.length} flats across your portfolio`,
-      detail: "",
+      title: "Collected this month",
+      value: monthlyCollected,
+      icon: Wallet,
+      foot: dateLabel(today, { month: "long", year: "numeric" }),
+      type: "money",
+      className: "featured",
+    },
+    {
+      title: "Outstanding balance",
+      value: outstanding,
+      icon: Receipt,
+      foot: "Includes annual rent and opening balances",
+      type: "money",
+      className: "",
     },
     {
       title: "Portfolio occupancy",
-      value: `${occupancy.toFixed(1)}%`,
+      value: occupancy,
       icon: Key,
-      foot: `${occupied} occupied · ${vacant} vacant`,
-      detail: "",
+      foot: `${occupied} occupied · ${vacant} vacant flats`,
+      type: "percent",
+      className: "",
     },
     {
-      title: "Rent collected",
-      value: money(total),
-      icon: Wallet,
-      foot: `Over the last ${period} months`,
-      detail: "AED",
-    },
-    {
-      title: "Upcoming cheques",
-      value: String(due.length),
+      title: "Due within 7 days",
+      value: due.reduce((s, c) => s + c.amount, 0),
       icon: CalendarBlank,
-      foot: `AED ${money(due.reduce((s, c) => s + c.amount, 0))} due in 7 days`,
-      detail: "",
+      foot: `${due.length} rental cheques to follow up`,
+      type: "money",
+      className: "",
     },
   ];
+  const attention = [
+    {
+      label: "Overdue rent cheques",
+      detail: "Follow up on uncleared payments",
+      count: overdue.length,
+      icon: WarningCircle,
+      tone: "danger",
+      href: "/cheques?view=overdue",
+    },
+    {
+      label: "Cheques due this week",
+      detail: "Prepare the next bank deposits",
+      count: due.length,
+      icon: Clock,
+      tone: "warning",
+      href: "/cheques?view=upcoming",
+    },
+    {
+      label: "Agreements ending soon",
+      detail: "Within the next 30 days",
+      count: renewals.length,
+      icon: FileText,
+      tone: "neutral",
+      href: "/agreements?view=expiring",
+    },
+    {
+      label: "Flats ready to rent",
+      detail: "Available across your properties",
+      count: vacant,
+      icon: Key,
+      tone: "success",
+      href: "/units?status=Vacant",
+    },
+  ];
+  const shownCheques = chequeView === "overdue" ? overdue : due;
   return (
     <>
       <PageHeader
-        eyebrow={`WELCOME BACK, ${data.membership.display_name.split(" ")[0].toUpperCase()}`}
-        title="Your portfolio, at a glance."
-        description="A little clarity for everything you manage."
+        eyebrow="Your property workspace"
+        title="Portfolio overview"
+        description={`${data.buildings.length} properties · ${data.units.length} flats · ${data.tenants.length} tenants across your portfolio`}
       >
-        <div className="date-chip">
+        <span className="date-chip">
           <CalendarBlank size={16} />
           {dateLabel(today, {
-            weekday: "short",
             day: "numeric",
             month: "short",
             year: "numeric",
           })}
-        </div>
-        {["owner", "manager"].includes(data.membership.role) && (
-          <Button variant="primary" onClick={() => openForm("building")}>
+        </span>
+        {finance && (
+          <Button variant="primary" onClick={() => openForm("account")}>
             <Plus size={18} />
-            Add property
+            Record payment
           </Button>
         )}
       </PageHeader>
       <div className="stats-grid">
         {stats.map((s) => (
-          <div className="stat-card" key={s.title}>
+          <section
+            className={`stat-card ${s.className}`}
+            key={s.title}
+            aria-label={s.title}
+          >
             <div className="stat-top">
               <span>{s.title}</span>
               <span className="stat-icon">
-                <s.icon size={18} />
+                <s.icon size={20} />
               </span>
             </div>
             <div className="stat-value">
-              {s.detail && <span className="currency">{s.detail}</span>}
-              {s.value}
-            </div>
-            <div className="stat-foot">
-              {s.title === "Portfolio occupancy" ? (
-                <span className="positive">
-                  <ArrowUpRight size={14} />
-                </span>
+              {s.type === "money" ? (
+                <Money value={s.value} />
+              ) : data.units.length ? (
+                `${s.value.toFixed(1)}%`
               ) : (
-                <span className="status-dot" />
+                "—"
               )}
-              {s.foot}
             </div>
-          </div>
+            <p className="stat-foot">{s.foot}</p>
+          </section>
         ))}
       </div>
       <div className="dashboard-chart-grid">
         <section className="panel padded">
           <SectionHeader
             title="Rental collections"
-            description="A clear picture of rent received."
+            description="Cleared payments against scheduled rental cheques"
           >
             <select
               className="filter-select"
@@ -174,231 +236,129 @@ export function Dashboard() {
             <strong className="chart-total">
               <Money value={total} />
             </strong>
-            <div className="chart-legend">
-              <span>
-                <i className="legend-dot dark" />
-                Collected
-              </span>
-              <span>
-                <i className="legend-dot" />
-                Scheduled
-              </span>
+            <span className="muted">received in this period</span>
+          </div>
+          <div className="chart-scroll">
+            <div
+              className={`collection-plot ${period === 12 ? "annual-plot" : ""}`}
+              role="img"
+              aria-label={`Rent collected over ${period} months: AED ${money(total)}`}
+            >
+              <div className="chart-axis">
+                {[1, 2 / 3, 1 / 3, 0].map((v) => (
+                  <span key={v}>
+                    {new Intl.NumberFormat("en", {
+                      notation: "compact",
+                      maximumFractionDigits: 0,
+                    }).format((max * v) / 100)}
+                  </span>
+                ))}
+              </div>
+              <div className="chart-months">
+                {series.map((m) => (
+                  <div className="chart-month" key={m.month}>
+                    <div
+                      className="chart-columns"
+                      title={`${m.label}: collected AED ${money(m.collected)}, scheduled AED ${money(m.expected)}`}
+                    >
+                      <span
+                        className="collection-bar"
+                        style={{
+                          height: `${Math.max(0, (m.collected / max) * 100)}%`,
+                        }}
+                      />
+                      <span
+                        className="schedule-bar"
+                        style={{
+                          height: `${Math.max(0, (m.expected / max) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <span>{m.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          <svg
-            className="collections-chart"
-            viewBox="0 0 640 200"
-            role="img"
-            aria-label={`Rent collected over ${period} months: AED ${money(total)}`}
-          >
-            {[0, 1, 2, 3].map((i) => (
-              <g key={i}>
-                <line
-                  x1="48"
-                  y1={16 + i * 48}
-                  x2="630"
-                  y2={16 + i * 48}
-                  className="gridline"
-                />
-                <text x="0" y={20 + i * 48}>
-                  {Math.round((max * (3 - i)) / 3 / 100000)}k
-                </text>
-              </g>
-            ))}
-            {series.map((m, i) => {
-              const space = 570 / period;
-              const x = 56 + i * space;
-              const width = Math.min(24, space / 3);
-              return (
-                <g key={m.month}>
-                  <title>{`${m.label}: Collected AED ${money(m.collected)}, scheduled AED ${money(m.expected)}`}</title>
-                  <rect
-                    x={x}
-                    y={160 - (m.collected / max) * 144}
-                    width={width}
-                    height={Math.max(1, (m.collected / max) * 144)}
-                    rx="3"
-                    fill="#698c54"
-                  />
-                  <rect
-                    x={x + width + 4}
-                    y={160 - (m.expected / max) * 144}
-                    width={width}
-                    height={Math.max(1, (m.expected / max) * 144)}
-                    rx="3"
-                    fill="#d9e6c8"
-                  />
-                  <text x={x + width} y="192" textAnchor="middle">
-                    {m.label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </section>
-        <section className="panel padded occupancy-panel">
-          <SectionHeader
-            title="Portfolio occupancy"
-            description="Every flat, accounted for."
-          >
-            <Badge tone="outline">Live</Badge>
-          </SectionHeader>
-          <div className="donut-wrap">
-            <svg viewBox="0 0 180 180" aria-hidden="true">
-              <circle
-                cx="90"
-                cy="90"
-                r="70"
-                fill="none"
-                stroke="#f0f3eb"
-                strokeWidth="16"
-              />
-              <circle
-                cx="90"
-                cy="90"
-                r="70"
-                fill="none"
-                stroke="#a5bf87"
-                strokeWidth="16"
-                strokeDasharray={`${(occupancy / 100) * 439.82} 439.82`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="donut-center">
-              <strong>
-                {occupancy.toFixed(1)}
-                <span className="muted">%</span>
-              </strong>
-              <small>Occupancy rate</small>
-            </div>
-          </div>
-          <div className="occupancy-legend">
+          <div className="chart-legend">
+            <span>
+              <i className="legend-dot dark" />
+              Collected
+            </span>
             <span>
               <i className="legend-dot" />
-              Occupied <b>{occupied}</b>
+              Scheduled
             </span>
-            <span>
-              <i className="legend-dot" style={{ background: "#e9eee2" }} />
-              Vacant <b>{vacant}</b>
-            </span>
+            <span className="chart-currency">Amounts in AED</span>
           </div>
-          {other > 0 && (
-            <p
-              className="muted"
-              style={{ textAlign: "center", fontSize: 12, marginTop: 12 }}
+        </section>
+        <section className="panel attention-panel">
+          <div className="panel-header">
+            <SectionHeader
+              title="Needs attention"
+              description="Your next actions, in one place"
             >
-              {other} reserved or under maintenance
-            </p>
-          )}
+              <span className="attention-marker" aria-hidden="true" />
+            </SectionHeader>
+          </div>
+          <div className="attention-list">
+            {attention.map((item) => (
+              <Link href={item.href} className="attention-row" key={item.label}>
+                <span className={`attention-icon ${item.tone}`}>
+                  <item.icon size={20} />
+                </span>
+                <span className="attention-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.detail}</small>
+                </span>
+                <strong className="attention-count">{item.count}</strong>
+                <ArrowRight size={16} />
+              </Link>
+            ))}
+          </div>
         </section>
       </div>
-      <section className="panel" style={{ marginBottom: 32 }}>
+      <section className="panel dashboard-cheques">
         <div className="panel-header">
           <SectionHeader
-            title="Cheques to keep an eye on"
-            description="Upcoming payments and items that need attention."
+            title="Cheque follow-up"
+            description="Review due dates and update payment status"
           >
-            <Link className="text-link" href="/cheques">
-              View all cheques
-              <ArrowRight size={14} />
+            <Link className="text-link" href={`/cheques?view=${chequeView}`}>
+              All cheques
+              <ArrowRight size={16} />
             </Link>
           </SectionHeader>
+          <fieldset
+            className="segmented-control"
+            aria-label="Cheques to display"
+          >
+            <button
+              type="button"
+              aria-pressed={chequeView === "upcoming"}
+              onClick={() => setChequeView("upcoming")}
+            >
+              Due this week <span>{due.length}</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={chequeView === "overdue"}
+              onClick={() => setChequeView("overdue")}
+            >
+              Overdue <span>{overdue.length}</span>
+            </button>
+          </fieldset>
         </div>
-        {upcoming.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Tenant</th>
-                  <th>Property / Flat</th>
-                  <th>Cheque number</th>
-                  <th>Due date</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th aria-label="View cheque" />
-                </tr>
-              </thead>
-              <tbody>
-                {upcoming.slice(0, 5).map((c) => {
-                  const t = data.tenants.find((t) => t.id === c.tenant_id),
-                    l = data.leases.find((l) => l.id === c.lease_id),
-                    u = data.units.find((u) => u.id === l?.unit_id),
-                    b = data.buildings.find((b) => b.id === u?.building_id);
-                  const days = daysUntil(c.due_date);
-                  return (
-                    <tr key={c.id}>
-                      <td className="cell-main">
-                        <Link
-                          className="cell-link"
-                          href={`/tenants/${c.tenant_id}`}
-                        >
-                          <span className="avatar small">
-                            {t?.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .slice(0, 2)
-                              .join("")}
-                          </span>
-                          <div>
-                            <strong>{t?.name}</strong>
-                            <small>{t?.email}</small>
-                          </div>
-                        </Link>
-                      </td>
-                      <td>
-                        <strong>{b?.name ?? "—"}</strong>
-                        <small>Flat {u?.code ?? "—"}</small>
-                      </td>
-                      <td>{c.number}</td>
-                      <td>
-                        <strong>
-                          {dateLabel(c.due_date, {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </strong>
-                        <small>
-                          {days < 0
-                            ? `${-days} days overdue`
-                            : days === 0
-                              ? "Due today"
-                              : `In ${days} days`}
-                        </small>
-                      </td>
-                      <td>
-                        <strong>
-                          <Money value={c.amount} />
-                        </strong>
-                      </td>
-                      <td>
-                        <Badge tone={days < 0 ? "danger" : "warning"}>
-                          {days < 0
-                            ? "Overdue"
-                            : c.status === "deposited"
-                              ? "Deposited"
-                              : "Upcoming"}
-                        </Badge>
-                      </td>
-                      <td>
-                        <Link
-                          className="text-link"
-                          href="/cheques"
-                          aria-label={`View cheque ${c.number}`}
-                        >
-                          <ArrowRight size={16} />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        {shownCheques.length ? (
+          <ChequeTable cheques={shownCheques.slice(0, 5)} />
         ) : (
           <Empty
-            title="No cheques to follow up"
-            description="Your rental payment schedule will appear here when you create an agreement."
+            title={
+              chequeView === "overdue"
+                ? "No overdue rent cheques"
+                : "No cheques due this week"
+            }
+            description="Your payment schedule is up to date. Switch views to review other cheques."
           />
         )}
       </section>
@@ -406,51 +366,53 @@ export function Dashboard() {
         <section className="panel">
           <div className="panel-header">
             <SectionHeader
-              title="Your properties"
-              description="Small details. A complete portfolio."
+              title="Property performance"
+              description={`${occupied} of ${data.units.length} flats currently occupied`}
             >
-              <Link className="text-link" href="/properties">
-                View portfolio
-                <ArrowRight size={14} />
+              <Link href="/properties" className="text-link">
+                All properties
+                <ArrowRight size={16} />
               </Link>
             </SectionHeader>
           </div>
           <div className="property-mini-list">
             {data.buildings.slice(0, 4).map((b) => {
               const units = data.units.filter((u) => u.building_id === b.id);
-              const occ = units.filter((u) => currentLease(data, u.id)).length;
+              const count = units.filter(
+                (u) => unitStatus(data, u) === "Occupied",
+              ).length;
               const percent = units.length
-                ? Math.round((occ / units.length) * 100)
+                ? Math.round((count / units.length) * 100)
                 : 0;
               return (
                 <Link
                   className="property-mini"
-                  key={b.id}
                   href={`/properties/${b.id}`}
+                  key={b.id}
                 >
-                  <span className="mini-building">
-                    <BuildingArt compact variant={b.color} />
+                  <span className="property-code-mini">
+                    {b.code.slice(0, 3)}
                   </span>
-                  <div className="property-mini-text">
+                  <span className="property-mini-text">
                     <strong>{b.name}</strong>
                     <small>
                       {b.area} · {units.length} flats
                     </small>
-                  </div>
-                  <div className="property-mini-stat">
+                  </span>
+                  <span className="property-mini-stat">
                     <strong>{percent}% occupied</strong>
-                    <div className="mini-progress">
+                    <span className="mini-progress">
                       <span style={{ width: `${percent}%` }} />
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="muted" />
+                    </span>
+                  </span>
+                  <ArrowRight size={16} />
                 </Link>
               );
             })}
             {!data.buildings.length && (
               <Empty
                 title="Your portfolio starts here"
-                description="Add your first building, then organise its floors and flats."
+                description="Add your first building, then its floors and flats."
               />
             )}
           </div>
@@ -459,51 +421,34 @@ export function Dashboard() {
           <div className="panel-header">
             <SectionHeader
               title="Recent activity"
-              description="The latest in your workspace."
+              description="Latest changes in your workspace"
             />
           </div>
           <div className="activity-list">
-            {data.activities.slice(0, 5).map((a) => {
-              const record =
-                a.resource_type === "buildings"
-                  ? data.buildings.find((r) => r.id === a.resource_id)?.name
-                  : a.resource_type === "tenants"
-                    ? data.tenants.find((r) => r.id === a.resource_id)?.name
-                    : a.resource_type === "leases"
-                      ? data.leases.find((r) => r.id === a.resource_id)
-                          ?.reference
-                      : a.resource_type === "cheques"
-                        ? data.cheques.find((r) => r.id === a.resource_id)
-                            ?.number
-                        : undefined;
+            {data.activities.slice(0, 4).map((a) => {
               const label =
-                {
-                  buildings: "Property",
-                  tenants: "Tenant",
-                  leases: "Agreement",
-                  cheques: "Cheque",
-                  ledger: "Account entry",
-                  deposits: "Security deposit",
-                  documents: "Document",
-                  units: "Flat",
-                }[a.resource_type] ?? "Record";
+                (
+                  {
+                    buildings: "Property",
+                    tenants: "Tenant",
+                    leases: "Agreement",
+                    cheques: "Cheque",
+                    ledger: "Account entry",
+                    deposits: "Security deposit",
+                    documents: "Document",
+                    units: "Flat",
+                  } as Record<string, string>
+                )[a.resource_type] ?? "Record";
               return (
                 <div className="activity-row" key={a.id}>
                   <span className="activity-symbol">
-                    {a.resource_type === "cheques" ? (
-                      <Wallet size={17} />
-                    ) : a.resource_type === "leases" ? (
-                      <FileText size={17} />
-                    ) : (
-                      <CheckCircle size={17} />
-                    )}
+                    <CheckCircle size={18} />
                   </span>
                   <div>
                     <p>
                       <strong>
                         {label} {a.action === "insert" ? "added" : "updated"}
                       </strong>
-                      {record && <> · {record}</>}
                     </p>
                     <small>{dateLabel(a.created_at)}</small>
                   </div>
@@ -512,8 +457,8 @@ export function Dashboard() {
             })}
             {!data.activities.length && (
               <Empty
-                title="A fresh start"
-                description="Changes to your portfolio will be recorded here."
+                title="No activity yet"
+                description="Changes to your portfolio will appear here."
               />
             )}
           </div>

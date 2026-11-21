@@ -9,6 +9,7 @@ import {
   Wallet,
 } from "@phosphor-icons/react";
 import { Button, ErrorText, Field } from "./ui";
+import { Brand } from "./brand";
 export function Login({ demo }: { demo: boolean }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -48,12 +49,7 @@ export function Login({ demo }: { demo: boolean }) {
     <main className="login-page">
       <section className="login-story">
         <div className="brand">
-          <span className="brand-mark">
-            <Buildings size={27} weight="duotone" />
-          </span>
-          <span>
-            aliyas<span className="brand-sub">ASSET MANAGEMENT</span>
-          </span>
+          <Brand />
         </div>
         <div className="login-story-copy">
           <div className="eyebrow">A CLEARER VIEW OF YOUR PROPERTIES</div>

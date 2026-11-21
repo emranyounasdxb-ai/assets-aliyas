@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bell,
   Buildings,
+  Car,
   ChartBar,
   ChartPieSlice,
   Check,
@@ -34,10 +35,12 @@ import {
 } from "@/lib/domain";
 import { AppProvider, useApp } from "./provider";
 import { Avatar, Badge, Button, Modal, Money, SearchInput } from "./ui";
+import { Brand } from "./brand";
 const mainNav = [
   { href: "/", label: "Overview", icon: SquaresFour },
   { href: "/properties", label: "Properties", icon: Buildings },
   { href: "/units", label: "Flats", icon: Key },
+  { href: "/parking", label: "Parking", icon: Car },
   { href: "/tenants", label: "Tenants", icon: Users },
 ];
 const financeNav = [
@@ -232,13 +235,13 @@ function Shell({ children }: { children: ReactNode }) {
           }
         }}
       >
-        <Link href="/" className="brand" onClick={() => setMobile(false)}>
-          <span className="brand-mark">
-            <Buildings size={27} weight="duotone" />
-          </span>
-          <span>
-            aliyas<span className="brand-sub">ASSET MANAGEMENT</span>
-          </span>
+        <Link
+          href="/"
+          className="brand"
+          aria-label="Aliyas Assets home"
+          onClick={() => setMobile(false)}
+        >
+          <Brand />
         </Link>
         <Button
           className="mobile-close icon-button"
@@ -253,7 +256,7 @@ function Shell({ children }: { children: ReactNode }) {
             <House size={17} />
           </span>
           <div>
-            <strong>Property workspace</strong>
+            <strong>{data.workspace.name}</strong>
             <small>Ajman, UAE</small>
           </div>
           <LockKey size={14} />
@@ -266,12 +269,8 @@ function Shell({ children }: { children: ReactNode }) {
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-help">
-            <div className="help-symbol">
-              <Question size={19} />
-            </div>
-            <strong>A place for everything.</strong>
-            <p>Get to know your property workspace.</p>
             <button type="button" onClick={() => setGuide(true)}>
+              <Question size={18} />
               Quick guide
               <ArrowRight size={15} />
             </button>
@@ -368,8 +367,8 @@ function Shell({ children }: { children: ReactNode }) {
           {children}
           <footer className="app-footer">
             <span>
-              Aliyas Assets<span className="footer-separator">/</span>Built for
-              a well managed portfolio.
+              Aliyas Assets<span className="footer-separator">/</span>Property
+              operations
             </span>
             <span>
               <LockKey size={13} />

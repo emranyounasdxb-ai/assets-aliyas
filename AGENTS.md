@@ -7,3 +7,5 @@
 - Keep customer documents, private keys, uploaded files and database backups out of Git. Use private file storage and enforce permissions when application development starts.
 - For website or application UI work, read and apply `C:/Users/emran/.agents/skills/landing-page-design/SKILL.md` before making design decisions. User directions and supplied facts take priority. Adapt the guidance to the purpose of each application screen.
 - Before delivering UI changes, verify relevant desktop and mobile layouts, links, keyboard focus, forms and reduced motion behavior.
+- Brand reference: https://aliyasrealestate.ae/ uses charcoal, white and muted gold. Keep the application aligned with the approved brand design.
+- Paid parking belongs to the same building as the tenant's apartment. Multiple numbered lots can be attached to an annual agreement; include their annual charges in the same rent cheques and prevent overlapping reservations. Lot numbers, capacities and rates must be supplied by the user, never invented.

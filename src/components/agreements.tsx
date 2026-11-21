@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, CheckCircle, Plus, Printer } from "@phosphor-icons/react";
-import { dateLabel, todayDubai } from "@/lib/domain";
+import { dateLabel, daysUntil, todayDubai } from "@/lib/domain";
 import { useApp } from "./provider";
 import {
   BackLink,
@@ -20,10 +20,15 @@ import {
 } from "./ui";
 import { DocumentPanel } from "./documents";
 import { ChequeTable } from "./accounts";
-export function Agreements() {
+import { ParkingAssignments } from "./parking-allocations";
+export function Agreements({
+  initialStatus = "all",
+}: {
+  initialStatus?: string;
+}) {
   const { data, openForm } = useApp();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
   const today = todayDubai();
   const label = (l: (typeof data.leases)[number]) =>
     l.status === "ended"
@@ -39,13 +44,19 @@ export function Agreements() {
       `${l.reference} ${data.tenants.find((t) => t.id === l.tenant_id)?.name} ${data.units.find((u) => u.id === l.unit_id)?.code}`
         .toLowerCase()
         .includes(query.toLowerCase()) &&
-      (status === "all" || label(l).toLowerCase() === status),
+      (status === "all" ||
+        (status === "expiring"
+          ? l.status === "active" &&
+            l.start_date <= today &&
+            daysUntil(l.end_date) >= 0 &&
+            daysUntil(l.end_date) <= 30
+          : label(l).toLowerCase() === status)),
   );
   return (
     <>
       <PageHeader
-        eyebrow="A CLEAR RECORD OF EVERY TENANCY"
-        title="The details, agreed."
+        eyebrow="Tenancy management"
+        title="Agreements"
         description="Annual agreements, payment schedules and signed documents."
       >
         {["owner", "manager"].includes(data.membership.role) && (
@@ -74,6 +85,7 @@ export function Agreements() {
           }}
         >
           <option value="all">All agreements</option>
+          <option value="expiring">Ending within 30 days</option>
           {["Active", "Upcoming", "Expired", "Ended"].map((s) => (
             <option key={s} value={s.toLowerCase()}>
               {s}
@@ -212,6 +224,10 @@ export function AgreementDetail({ id }: { id: string }) {
   const paid = -data.ledger
     .filter((e) => e.lease_id === id && e.kind === "payment")
     .reduce((s, e) => s + e.amount, 0);
+  const parking = data.parkingAllocations.filter(
+    (a) => a.lease_id === id && a.status === "active",
+  );
+  const parkingTotal = parking.reduce((s, a) => s + a.annual_charge, 0);
   const manage = ["owner", "manager"].includes(data.membership.role);
   async function end() {
     setPending(true);
@@ -263,13 +279,13 @@ export function AgreementDetail({ id }: { id: string }) {
       </PageHeader>
       <div className="summary-strip no-print">
         <div>
-          <small>Annual rent</small>
+          <small>Total contract</small>
           <strong>
-            <Money value={lease.annual_rent} />
+            <Money value={lease.annual_rent + parkingTotal} />
           </strong>
         </div>
         <div>
-          <small>Rent received by cheque</small>
+          <small>Payments received by cheque</small>
           <strong>
             <Money value={paid} />
           </strong>
@@ -369,6 +385,44 @@ export function AgreementDetail({ id }: { id: string }) {
             <dd>Recorded separately in the tenant account</dd>
           </div>
         </dl>
+        <h3>Reserved parking spaces</h3>
+        {parking.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Parking space</th>
+                  <th>Annual charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parking.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.property_label}</td>
+                    <td>{a.lot_label}</td>
+                    <td>
+                      <Money value={a.annual_charge} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">No paid parking included in this agreement.</p>
+        )}
+        <div className="contract-parking-total">
+          <span>
+            Flat rent <Money value={lease.annual_rent} />
+          </span>
+          <span>
+            Parking <Money value={parkingTotal} />
+          </span>
+          <strong>
+            Total contract <Money value={lease.annual_rent + parkingTotal} />
+          </strong>
+        </div>
         {lease.notes && (
           <>
             <h3>Additional notes</h3>
@@ -405,6 +459,9 @@ export function AgreementDetail({ id }: { id: string }) {
           <div>Tenant signature / date</div>
         </div>
       </section>
+      <div className="parking-section no-print">
+        <ParkingAssignments leaseId={id} />
+      </div>
       <div style={{ marginTop: 24 }} className="no-print">
         <DocumentPanel
           targetType="lease"

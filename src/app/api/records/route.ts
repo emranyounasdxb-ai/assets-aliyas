@@ -34,6 +34,64 @@ export async function POST(request: Request) {
       error: { code?: string; message: string } | null;
     };
     switch (body.action) {
+      case "parking_allocate": {
+        requireRole(member);
+        const v = z
+          .object({ lease_id: uuid, lot_ids: z.array(uuid).min(1).max(20) })
+          .parse(p);
+        result = await db.rpc("allocate_parking", {
+          l: v.lease_id,
+          lot_ids: v.lot_ids,
+        });
+        break;
+      }
+      case "parking_cancel": {
+        requireRole(member);
+        result = await db.rpc("cancel_parking_allocation", {
+          a: uuid.parse(p.id),
+        });
+        break;
+      }
+      case "parking_lot": {
+        requireRole(member);
+        const v = z
+          .object({
+            id: uuid.optional(),
+            building_id: uuid,
+            floor_id: z
+              .union([uuid, z.literal("")])
+              .transform((v) => v || null),
+            number: text(40),
+            status: z.enum(["available", "blocked"]),
+            rate_amount: z
+              .union([amount, z.literal("")])
+              .transform((v) => (v === "" ? null : v)),
+            rate_period: z
+              .union([z.enum(["monthly", "yearly"]), z.literal("")])
+              .transform((v) => v || null),
+            notes: optionalText(1000),
+          })
+          .parse(p);
+        if ((v.rate_amount === null) !== (v.rate_period === null))
+          throw new AppError(
+            "Enter both the parking rate and its billing period, or leave both blank",
+          );
+        const { id, ...fields } = v;
+        result = id
+          ? await db
+              .from("parking_lots")
+              .update(fields)
+              .eq("id", id)
+              .eq("workspace_id", w)
+              .select("id")
+              .single()
+          : await db
+              .from("parking_lots")
+              .insert({ ...fields, workspace_id: w })
+              .select("id")
+              .single();
+        break;
+      }
       case "building": {
         requireRole(member);
         const v = z
@@ -46,6 +104,10 @@ export async function POST(request: Request) {
             amenities,
             notes: optionalText(2000),
             color: z.enum(["sage", "sand", "slate", "rose"]).default("sage"),
+            declared_levels: z.preprocess(
+              (value) => (value === "" || value === undefined ? null : value),
+              z.coerce.number().int().min(1).max(250).nullable(),
+            ),
             floor_count: z.coerce.number().int().min(0).max(100).default(3),
           })
           .parse(p);
@@ -65,16 +127,30 @@ export async function POST(request: Request) {
         requireRole(member);
         const v = z
           .object({
+            id: uuid.optional(),
             building_id: uuid,
             name: text(80),
             ordinal: z.coerce.number().int().min(-10).max(200),
+            purpose: z
+              .enum(["unspecified", "residential", "parking", "service"])
+              .default("unspecified"),
+            notes: optionalText(1000),
           })
           .parse(p);
-        result = await db
-          .from("floors")
-          .insert({ ...v, workspace_id: w })
-          .select("id")
-          .single();
+        const { id, ...fields } = v;
+        result = id
+          ? await db
+              .from("floors")
+              .update(fields)
+              .eq("id", id)
+              .eq("workspace_id", w)
+              .select("id")
+              .single()
+          : await db
+              .from("floors")
+              .insert({ ...fields, workspace_id: w })
+              .select("id")
+              .single();
         break;
       }
       case "unit": {
@@ -148,19 +224,26 @@ export async function POST(request: Request) {
             reference: text(40),
             bank: optionalText(120),
             notes: optionalText(2000),
+            parking_lot_ids: z.array(uuid).max(20).default([]),
           })
           .parse(p);
-        result = await db.rpc("create_lease", {
-          w,
-          t: v.tenant_id,
-          u: v.unit_id,
-          starts: v.start_date,
-          rent: v.annual_rent,
-          checks: v.installments,
-          ref: v.reference,
-          bank_name: v.bank,
-          notes_text: v.notes,
-        });
+        result = await db.rpc(
+          v.parking_lot_ids.length
+            ? "create_lease_with_parking"
+            : "create_lease",
+          {
+            w,
+            t: v.tenant_id,
+            u: v.unit_id,
+            starts: v.start_date,
+            rent: v.annual_rent,
+            checks: v.installments,
+            ref: v.reference,
+            bank_name: v.bank,
+            notes_text: v.notes,
+            ...(v.parking_lot_ids.length ? { lot_ids: v.parking_lot_ids } : {}),
+          },
+        );
         break;
       }
       case "cheque": {
@@ -358,6 +441,10 @@ export async function POST(request: Request) {
         throw new AppError("Unknown action");
     }
     if (result.error) {
+      if (result.error.code === "23P01")
+        throw new AppError(
+          "A selected parking lot is already reserved for these dates. Refresh and choose an available space.",
+        );
       if (result.error.code === "P0001")
         throw new AppError(result.error.message);
       if (result.error.code === "23505")

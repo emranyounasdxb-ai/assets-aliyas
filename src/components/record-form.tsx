@@ -4,6 +4,8 @@ import Link from "next/link";
 import {
   amenityOptions,
   annualEnd,
+  annualParkingCharge,
+  parkingAvailable,
   categories,
   installmentSchedule,
   money,
@@ -11,7 +13,7 @@ import {
   unitStatus,
 } from "@/lib/domain";
 import { useApp } from "./provider";
-import { ErrorText, Field, Modal, SaveFooter } from "./ui";
+import { ErrorText, Field, Modal, Money, SaveFooter } from "./ui";
 export type FormKind =
   | "building"
   | "floor"
@@ -65,6 +67,10 @@ export function RecordForm({
   );
   const [starts, setStarts] = useState(todayDubai());
   const [checks, setChecks] = useState(4);
+  const [parkingIds, setParkingIds] = useState<string[]>([]);
+  const parkingTotal = data.parkingLots
+    .filter((l) => parkingIds.includes(l.id))
+    .reduce((s, l) => s + annualParkingCharge(l), 0);
   const [securityType, setSecurityType] = useState("cash");
   const [entryKind, setEntryKind] = useState("payment");
   const [requestKey] = useState(() => crypto.randomUUID());
@@ -79,7 +85,7 @@ export function RecordForm({
   let schedule: { amount: number; date: string }[] = [];
   try {
     schedule = installmentSchedule(
-      Math.round(Number(rent) * 100),
+      Math.round(Number(rent) * 100) + parkingTotal,
       checks,
       starts,
     );
@@ -91,6 +97,8 @@ export function RecordForm({
     const form = new FormData(event.currentTarget);
     const fields: Record<string, unknown> = Object.fromEntries(form.entries());
     if (initial.id) fields.id = initial.id;
+    if (kind === "lease")
+      fields.parking_lot_ids = form.getAll("parking_lot_ids");
     if (["building", "unit"].includes(kind))
       fields.amenities = form.getAll("amenities");
     if (kind === "account") {
@@ -179,6 +187,18 @@ export function RecordForm({
                   placeholder="e.g. Al Nuaimiya"
                 />
               </Field>
+              <Field
+                label="Total physical levels"
+                hint="Confirmed building total. Leave blank if unconfirmed."
+              >
+                <input
+                  name="declared_levels"
+                  type="number"
+                  min={1}
+                  max={250}
+                  defaultValue={val("declared_levels")}
+                />
+              </Field>
               {!initial.id && (
                 <Field
                   label="Upper floors"
@@ -223,23 +243,49 @@ export function RecordForm({
                   name="name"
                   maxLength={80}
                   placeholder="e.g. Floor 4"
+                  defaultValue={val("name")}
                 />
               </Field>
-              <Field label="Floor number">
+              <Field
+                label="Display order"
+                hint="Sort order from the ground up. The floor name controls its displayed number."
+              >
                 <input
                   required
                   name="ordinal"
                   type="number"
                   min={-10}
                   max={200}
-                  defaultValue={
-                    Math.max(
-                      0,
-                      ...data.floors
-                        .filter((f) => f.building_id === building)
-                        .map((f) => f.ordinal),
-                    ) + 1
-                  }
+                  defaultValue={val(
+                    "ordinal",
+                    String(
+                      Math.max(
+                        0,
+                        ...data.floors
+                          .filter((f) => f.building_id === building)
+                          .map((f) => f.ordinal),
+                      ) + 1,
+                    ),
+                  )}
+                />
+              </Field>
+              <Field label="Floor use">
+                <select
+                  name="purpose"
+                  defaultValue={val("purpose", "unspecified")}
+                >
+                  <option value="unspecified">Not specified</option>
+                  <option value="residential">Residential</option>
+                  <option value="parking">Parking</option>
+                  <option value="service">Gym and service area</option>
+                </select>
+              </Field>
+              <Field label="Floor notes">
+                <textarea
+                  name="notes"
+                  maxLength={1000}
+                  defaultValue={val("notes")}
+                  placeholder="Confirmed facilities or floor details"
                 />
               </Field>
             </>
@@ -276,7 +322,11 @@ export function RecordForm({
                 >
                   <option value="">Choose a floor</option>
                   {data.floors
-                    .filter((f) => f.building_id === building)
+                    .filter(
+                      (f) =>
+                        f.building_id === building &&
+                        !["parking", "service"].includes(f.purpose),
+                    )
                     .map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.name}
@@ -419,6 +469,7 @@ export function RecordForm({
                   value={unit}
                   onChange={(e) => {
                     setUnit(e.target.value);
+                    setParkingIds([]);
                     setRent(
                       String(
                         ((data.units.find((u) => u.id === e.target.value)
@@ -457,7 +508,10 @@ export function RecordForm({
                   type="date"
                   required
                   value={starts}
-                  onChange={(e) => setStarts(e.target.value)}
+                  onChange={(e) => {
+                    setStarts(e.target.value);
+                    setParkingIds([]);
+                  }}
                 />
               </Field>
               <Field label="Annual agreed rent (AED)">
@@ -485,6 +539,78 @@ export function RecordForm({
                   ))}
                 </select>
               </Field>
+              <fieldset className="parking-picker span-2">
+                <legend>Paid parking (optional)</legend>
+                <p className="parking-help">
+                  Select one or more numbered spaces in the same building. They
+                  will be reserved for the full agreement term.
+                </p>
+                {data.parkingLots
+                  .filter((l) => l.building_id === selectedUnit?.building_id)
+                  .map((lot) => {
+                    const available = Boolean(
+                      starts &&
+                      lot.rate_amount &&
+                      parkingAvailable(
+                        data.parkingAllocations,
+                        lot,
+                        starts,
+                        annualEnd(starts),
+                      ),
+                    );
+                    return (
+                      <label
+                        key={lot.id}
+                        className={available ? "" : "unavailable"}
+                      >
+                        <input
+                          type="checkbox"
+                          name="parking_lot_ids"
+                          value={lot.id}
+                          disabled={!available}
+                          checked={parkingIds.includes(lot.id)}
+                          onChange={(e) =>
+                            setParkingIds((ids) =>
+                              e.target.checked
+                                ? [...ids, lot.id]
+                                : ids.filter((id) => id !== lot.id),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>Lot {lot.number}</strong>
+                          <small>
+                            {data.floors.find((f) => f.id === lot.floor_id)
+                              ?.name ?? "No level recorded"}
+                            {!available
+                              ? lot.rate_amount
+                                ? " · Unavailable for these dates"
+                                : " · Rate not set"
+                              : ""}
+                          </small>
+                        </span>
+                        <span className="parking-picker-price">
+                          {lot.rate_amount ? (
+                            <>
+                              <Money value={annualParkingCharge(lot)} />
+                              <small>per agreement year</small>
+                            </>
+                          ) : (
+                            "Rate not entered"
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                {!data.parkingLots.some(
+                  (l) => l.building_id === selectedUnit?.building_id,
+                ) && (
+                  <p className="muted">
+                    No numbered parking lots have been entered for this
+                    building.
+                  </p>
+                )}
+              </fieldset>
               <Field wide label="Tenant's bank">
                 <input
                   name="bank"
@@ -503,6 +629,22 @@ export function RecordForm({
                 <div>
                   <strong>Payment schedule</strong>
                   <span>Ends {starts ? annualEnd(starts) : "—"}</span>
+                </div>
+                <div>
+                  <span>Annual flat rent</span>
+                  <strong>AED {money(Math.round(Number(rent) * 100))}</strong>
+                </div>
+                <div>
+                  <span>Annual parking charges</span>
+                  <strong>
+                    <Money value={parkingTotal} />
+                  </strong>
+                </div>
+                <div>
+                  <span>Total agreement</span>
+                  <strong>
+                    AED {money(Math.round(Number(rent) * 100) + parkingTotal)}
+                  </strong>
                 </div>
                 {schedule.map((item, i) => (
                   <div key={item.date}>

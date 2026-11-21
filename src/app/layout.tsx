@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
+import "./brand.css";
 export const metadata: Metadata = {
   title: {
     default: "Aliyas Assets · Property management",

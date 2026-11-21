@@ -82,3 +82,7 @@ The backup command streams the database archive and private storage archive dire
 The automated tests use isolated verification workspaces and fictional records. They cover tenant and property forms, agreement overlap, exact installments, payment idempotency, security separation, private file upload and replacement, cross-workspace and viewer access, CSV export, mobile layout, keyboard focus and reduced motion.
 
 Before production: confirm wallet and settlement rules; approve the official tenancy template; configure staff onboarding, hosted Supabase and its region, HTTPS, scanner hosting, monitoring, retention, automatic off-device backups and a verified restoration procedure. Decide external reminder channels and provider accounts. Do not use the local demo account as a production staff account.
+
+## Brand and paid parking update
+
+The application now includes the company brand redesign, editable floor uses, private company inventory and paid parking control. Annual parking charges share the tenancy cheque schedule and have separate ledger debits. See [Design and parking workflows](design-and-parking.md) for reservation constraints, amendments and validation.

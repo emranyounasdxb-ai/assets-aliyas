@@ -35,10 +35,10 @@ import {
   statusTone,
   useList,
 } from "./ui";
-export function Cheques() {
+export function Cheques({ initialFilter = "all" }: { initialFilter?: string }) {
   const { data } = useApp();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(initialFilter);
   const [purpose, setPurpose] = useState("rent");
   const [property, setProperty] = useState("all");
   const list = useList(
@@ -93,9 +93,9 @@ export function Cheques() {
   return (
     <>
       <PageHeader
-        eyebrow="EVERY PAYMENT, ACCOUNTED FOR"
-        title="Stay a cheque ahead."
-        description="Track rental cheques, their dates and what happens next."
+        eyebrow="Rent and security payments"
+        title="Cheques"
+        description="Track due dates, bank deposits and cleared payments."
       >
         <Button onClick={download}>
           <DownloadSimple size={17} />
@@ -220,14 +220,14 @@ export function ChequeTable({ cheques }: { cheques: Cheque[] }) {
     data.membership.role,
   );
   return (
-    <div className="table-wrap">
-      <table>
+    <div className="table-wrap cheque-table-wrap">
+      <table className="cheque-table">
         <thead>
           <tr>
             <th>Cheque / Bank</th>
             <th>Tenant</th>
             <th>Due date</th>
-            <th>Amount</th>
+            <th className="align-right">Amount</th>
             <th>Purpose</th>
             <th>Status</th>
             <th />
@@ -241,16 +241,16 @@ export function ChequeTable({ cheques }: { cheques: Cheque[] }) {
             );
             return (
               <tr key={c.id}>
-                <td>
+                <td className="cheque-reference" data-label="Cheque / Bank">
                   <strong>{c.number}</strong>
                   <small>{c.bank || "Bank not entered"}</small>
                 </td>
-                <td>
+                <td className="cheque-tenant" data-label="Tenant">
                   <Link className="text-link" href={`/tenants/${c.tenant_id}`}>
                     {data.tenants.find((t) => t.id === c.tenant_id)?.name}
                   </Link>
                 </td>
-                <td>
+                <td className="cheque-date" data-label="Due date">
                   {dateLabel(c.due_date)}
                   {late && (
                     <small style={{ color: "var(--red)" }}>
@@ -261,30 +261,31 @@ export function ChequeTable({ cheques }: { cheques: Cheque[] }) {
                     <small>Cleared {dateLabel(c.cleared_on)}</small>
                   )}
                 </td>
-                <td>
+                <td className="cheque-amount align-right" data-label="Amount">
                   <strong>
                     <Money value={c.amount} />
                   </strong>
                 </td>
-                <td>
+                <td className="cheque-purpose" data-label="Purpose">
                   <Badge
                     tone={c.purpose === "security" ? "outline" : "neutral"}
                   >
                     {c.purpose}
                   </Badge>
                 </td>
-                <td>
+                <td className="cheque-status" data-label="Status">
                   <Badge tone={statusTone(c.status)}>{c.status}</Badge>
                 </td>
-                <td>
+                <td className="cheque-action">
                   {finance && !final ? (
                     <Button
                       variant="ghost"
-                      className="icon-button"
+                      className="cheque-update"
                       aria-label={`Update cheque ${c.number}`}
                       onClick={() => openForm("cheque", { ...c })}
                     >
                       <PencilSimple size={16} />
+                      Update
                     </Button>
                   ) : final ? (
                     <CheckCircle size={17} className="muted" />

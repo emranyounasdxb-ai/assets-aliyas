@@ -28,12 +28,18 @@ async function action(
   });
 }
 async function readRows(table: string) {
-  const { data, error } = await admin
-    .from(table)
-    .select("*")
-    .eq("workspace_id", workspace);
-  if (error) throw error;
-  return data ?? [];
+  const rows = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await admin
+      .from(table)
+      .select("*")
+      .eq("workspace_id", workspace)
+      .order("id")
+      .range(offset, offset + 999);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) return rows;
+  }
 }
 async function checkedAction(name: string, data: Record<string, unknown>) {
   const response = await action(name, data);
@@ -67,7 +73,9 @@ async function cleanupWorkspace(id: string) {
     "ledger",
     "deposits",
     "cheques",
+    "parking_allocations",
     "leases",
+    "parking_lots",
     "units",
     "floors",
     "tenants",
@@ -320,6 +328,7 @@ test.describe.serial("Property management workspace", () => {
     const pdf = await pdfPage.pdf({ format: "A4" });
     await pdfPage.close();
     await page.goto(`${origin}/tenants/${tenant}`);
+    await page.getByRole("tab", { name: /Documents/ }).click();
     await page.getByRole("button", { name: "Upload", exact: true }).click();
     let form = page.getByRole("dialog");
     await form.getByLabel("Document category").selectOption("Passport");
@@ -556,6 +565,31 @@ test.describe.serial("Property management workspace", () => {
         expect(
           (
             await action(
+              "parking_lot",
+              {
+                building_id: building,
+                floor_id: "",
+                number: "FORBIDDEN",
+                status: "available",
+                rate_amount: "100",
+                rate_period: "monthly",
+              },
+              other,
+            )
+          ).status(),
+        ).toBe(403);
+        expect(
+          (
+            await action(
+              "parking_allocate",
+              { lease_id: lease, lot_ids: [unit] },
+              other,
+            )
+          ).status(),
+        ).toBe(403);
+        expect(
+          (
+            await action(
               "tenant",
               { name: "Forbidden", phone: "No contact" },
               other,
@@ -584,6 +618,316 @@ test.describe.serial("Property management workspace", () => {
       }
       await other.close();
     }
+  });
+  test("edits floor use and prevents apartments on service and parking levels", async () => {
+    const floors = await readRows("floors");
+    const floor = floors.find((f) => f.name === "Floor 2");
+    expect(floor).toBeTruthy();
+    await page.goto(`${origin}/properties/${building}`);
+    await page
+      .getByLabel("Choose floor", { exact: true })
+      .selectOption(floor.id);
+    await page
+      .getByRole("button", { name: "Edit Floor 2", exact: true })
+      .click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("Floor use").selectOption("service");
+    await form
+      .getByLabel("Floor notes")
+      .fill("Verification gym. No apartments.");
+    await form
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(form).toHaveCount(0);
+    expect(
+      (await readRows("floors")).find((f) => f.id === floor.id).purpose,
+    ).toBe("service");
+    const payload = {
+      building_id: building,
+      floor_id: floor.id,
+      code: "BLOCKED-SERVICE",
+      category: "Studio",
+      monthly_rent: "1000",
+      area_sqft: 400,
+      amenities: [],
+    };
+    expect((await action("unit", payload)).status()).toBe(400);
+    await checkedAction("floor", { ...floor, purpose: "parking" });
+    expect(
+      (await action("unit", { ...payload, code: "BLOCKED-PARKING" })).status(),
+    ).toBe(400);
+    await checkedAction("floor", { ...floor, purpose: "unspecified" });
+  });
+  test("reserves multiple paid parking lots with the combined agreement cheque schedule", async () => {
+    const floors = await readRows("floors");
+    const ground = floors.find(
+      (f) => f.building_id === building && f.ordinal === 0,
+    );
+    await page.goto(`${origin}/parking`);
+    await page
+      .getByRole("button", { name: "Add parking lot", exact: true })
+      .click();
+    let form = page.getByRole("dialog");
+    await form.getByLabel("Parking number", { exact: true }).fill("QA-P1-A");
+    await form.getByLabel("Property", { exact: true }).selectOption(building);
+    await form
+      .getByLabel("Parking level", { exact: true })
+      .selectOption(ground.id);
+    await form.getByLabel("Reference parking rate (AED)").fill("100");
+    await form
+      .getByLabel("Rate period", { exact: true })
+      .selectOption("monthly");
+    await form
+      .getByRole("button", { name: "Save parking lot", exact: true })
+      .click();
+    await expect(form).toHaveCount(0);
+    await checkedAction("parking_lot", {
+      building_id: building,
+      floor_id: ground.id,
+      number: "QA-P1-B",
+      status: "available",
+      rate_amount: "2400",
+      rate_period: "yearly",
+      notes: "Fictional verification lot",
+    });
+    const lots = await readRows("parking_lots");
+    const lotA = lots.find((l) => l.number === "QA-P1-A");
+    const lotB = lots.find((l) => l.number === "QA-P1-B");
+    await checkedAction("unit", {
+      building_id: building,
+      floor_id: ground.id,
+      code: "QA-PARK-A",
+      category: "Studio",
+      monthly_rent: "2000",
+      area_sqft: 500,
+      amenities: [],
+    });
+    const apartment = (await readRows("units")).find(
+      (u) => u.code === "QA-PARK-A",
+    );
+    await page.goto(`${origin}/agreements`);
+    await page
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    form = page.getByRole("dialog");
+    await form.getByLabel("Tenant", { exact: true }).selectOption(tenant);
+    await form.getByLabel("Flat", { exact: true }).selectOption(apartment.id);
+    await form
+      .getByLabel("Agreement reference", { exact: true })
+      .fill("QA-PARK-COMBINED");
+    await form.getByLabel("Annual agreed rent (AED)").fill("24000");
+    await form.getByRole("checkbox", { name: /Lot QA-P1-A/ }).check();
+    await form.getByRole("checkbox", { name: /Lot QA-P1-B/ }).check();
+    await expect(form.getByText(/27,600/)).toBeVisible();
+    await form
+      .getByRole("button", { name: "Create agreement", exact: true })
+      .click();
+    await expect(form).toHaveCount(0);
+    const agreement = (await readRows("leases")).find(
+      (l) => l.reference === "QA-PARK-COMBINED",
+    );
+    const allocations = (await readRows("parking_allocations")).filter(
+      (a) => a.lease_id === agreement.id,
+    );
+    expect(allocations).toHaveLength(2);
+    expect(allocations.reduce((s, a) => s + a.annual_charge, 0)).toBe(360000);
+    const cheques = (await readRows("cheques")).filter(
+      (c) => c.lease_id === agreement.id,
+    );
+    expect(cheques).toHaveLength(4);
+    expect(cheques.every((c) => c.amount === 690000)).toBe(true);
+    await checkedAction("parking_allocate", {
+      lease_id: agreement.id,
+      lot_ids: [lotA.id, lotB.id],
+    });
+    expect(
+      (await readRows("ledger")).filter(
+        (e) => e.lease_id === agreement.id && e.kind === "parking",
+      ),
+    ).toHaveLength(2);
+    await checkedAction("parking_lot", {
+      ...lotA,
+      floor_id: ground.id,
+      rate_amount: "200",
+      rate_period: "monthly",
+    });
+    expect(
+      (await readRows("parking_allocations")).find((a) => a.lot_id === lotA.id)
+        .annual_charge,
+    ).toBe(120000);
+    await page.goto(`${origin}/agreements/${agreement.id}`);
+    await expect(
+      page.getByText("Ground floor · Lot QA-P1-A", { exact: true }).first(),
+    ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Remove parking Ground floor · Lot QA-P1-A",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Remove parking", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(
+      (await readRows("cheques"))
+        .filter((c) => c.lease_id === agreement.id)
+        .reduce((s, c) => s + c.amount, 0),
+    ).toBe(2640000);
+    const before = (await readRows("ledger")).filter(
+      (e) => e.lease_id === agreement.id,
+    ).length;
+    const firstCheque = (await readRows("cheques")).find(
+      (c) => c.lease_id === agreement.id,
+    );
+    await checkedAction("cheque", {
+      id: firstCheque.id,
+      status: "received",
+      number: firstCheque.number,
+      bank: "Verification Bank",
+      on_date: todayDubai(),
+    });
+    const remaining = (await readRows("parking_allocations")).find(
+      (a) => a.lease_id === agreement.id && a.status === "active",
+    );
+    expect(
+      (await action("parking_cancel", { id: remaining.id })).status(),
+    ).toBe(400);
+    expect(
+      (await readRows("ledger")).filter((e) => e.lease_id === agreement.id),
+    ).toHaveLength(before);
+    expect(
+      (
+        await action("parking_lot", {
+          ...lotB,
+          number: "FORBIDDEN-RENAME",
+          rate_amount: "2400",
+          rate_period: "yearly",
+        })
+      ).status(),
+    ).toBe(400);
+  });
+  test("prevents simultaneous double parking allocation and cross-building assignment", async () => {
+    const ground = (await readRows("floors")).find(
+      (f) => f.building_id === building && f.ordinal === 0,
+    );
+    await checkedAction("parking_lot", {
+      building_id: building,
+      floor_id: ground.id,
+      number: "QA-RACE",
+      status: "available",
+      rate_amount: "1800",
+      rate_period: "yearly",
+    });
+    const lot = (await readRows("parking_lots")).find(
+      (l) => l.number === "QA-RACE",
+    );
+    const ids = [];
+    for (const suffix of ["B", "C"]) {
+      await checkedAction("unit", {
+        building_id: building,
+        floor_id: ground.id,
+        code: `QA-PARK-${suffix}`,
+        category: "Studio",
+        monthly_rent: "2000",
+        amenities: [],
+      });
+      const apartment = (await readRows("units")).find(
+        (u) => u.code === `QA-PARK-${suffix}`,
+      );
+      const id = await checkedAction("lease", {
+        tenant_id: tenant,
+        unit_id: apartment.id,
+        start_date: todayDubai(),
+        annual_rent: "24000",
+        installments: 4,
+        reference: `QA-PARK-${suffix}`,
+      });
+      ids.push(id.result);
+    }
+    const results = await Promise.all(
+      ids.map((lease_id) =>
+        action("parking_allocate", { lease_id, lot_ids: [lot.id] }),
+      ),
+    );
+    expect(results.map((r) => r.status()).sort()).toEqual([200, 400]);
+    const active = (await readRows("parking_allocations")).filter(
+      (a) => a.lot_id === lot.id && a.status === "active",
+    );
+    expect(active).toHaveLength(1);
+    const loser = ids.find((id) => id !== active[0].lease_id);
+    expect(
+      (await readRows("ledger")).filter(
+        (e) => e.lease_id === loser && e.kind === "parking",
+      ),
+    ).toHaveLength(0);
+    expect(
+      (await readRows("cheques"))
+        .filter((c) => c.lease_id === loser)
+        .reduce((s, c) => s + c.amount, 0),
+    ).toBe(2400000);
+    const otherId = (
+      await checkedAction("building", {
+        name: "Parking verification annex",
+        code: "QA-ANNEX",
+        area: "Al Aliya",
+        floor_count: 0,
+      })
+    ).result;
+    await checkedAction("parking_lot", {
+      building_id: otherId,
+      floor_id: "",
+      number: "ANNEX-1",
+      status: "available",
+      rate_amount: "1500",
+      rate_period: "yearly",
+    });
+    const otherLot = (await readRows("parking_lots")).find(
+      (l) => l.number === "ANNEX-1",
+    );
+    const rejected = await action("parking_allocate", {
+      lease_id: loser,
+      lot_ids: [otherLot.id],
+    });
+    expect(rejected.status()).toBe(400);
+    expect((await rejected.json()).error).toContain("same building");
+  });
+  test("uses profile tabs, property views and dashboard filters", async () => {
+    await page.goto(`${origin}/tenants/${tenant}`);
+    const overview = page.getByRole("tab", { name: "Overview", exact: true });
+    await overview.focus();
+    await overview.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: /Documents/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      page.getByRole("heading", { name: "Tenant documents", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Account", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Account activity", exact: true }),
+    ).toBeVisible();
+    await page.goto(`${origin}/properties`);
+    await page
+      .getByRole("button", { name: "Property list view", exact: true })
+      .click();
+    await expect(page.locator(".property-list-view")).toBeVisible();
+    await page
+      .getByRole("button", { name: "Property grid view", exact: true })
+      .click();
+    await expect(page.locator(".property-list-view")).toHaveCount(0);
+    await page.goto(`${origin}/`);
+    await page.getByRole("link", { name: /Overdue rent cheques/ }).click();
+    await expect(page.getByLabel("Cheque status", { exact: true })).toHaveValue(
+      "overdue",
+    );
+    await page.goto(`${origin}/`);
+    await page.getByRole("link", { name: /Flats ready to rent/ }).click();
+    await expect(
+      page.getByLabel("Filter flat status", { exact: true }),
+    ).toHaveValue("Vacant");
   });
   test("exports a real occupancy CSV and displays a printable agreement", async () => {
     await page.goto(`${origin}/reports`);
@@ -637,6 +981,7 @@ test.describe.serial("Property management workspace", () => {
       "tenants",
       "agreements",
       "cheques",
+      "parking",
       "wallets",
       "documents",
       "reports",

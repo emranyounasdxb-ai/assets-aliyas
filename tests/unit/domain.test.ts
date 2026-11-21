@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   accountBalance,
+  annualParkingCharge,
+  parkingAvailable,
   annualEnd,
   installmentSchedule,
   todayDubai,
@@ -9,10 +11,57 @@ import {
   type Cheque,
   type LedgerEntry,
   type Unit,
+  type ParkingLot,
+  type ParkingAllocation,
 } from "../../src/lib/domain";
 import { amount, signedAmount } from "../../src/lib/validation";
 import { localDemoAllowed } from "../../src/lib/server/env";
 afterEach(() => vi.unstubAllEnvs());
+
+describe("Paid parking", () => {
+  it("keeps a yearly price and converts a monthly price to an annual agreement charge", () => {
+    expect(
+      annualParkingCharge({ rate_amount: 12550, rate_period: "monthly" }),
+    ).toBe(150600);
+    expect(
+      annualParkingCharge({ rate_amount: 183075, rate_period: "yearly" }),
+    ).toBe(183075);
+    expect(annualParkingCharge({ rate_amount: null, rate_period: null })).toBe(
+      0,
+    );
+  });
+  it("reserves both date boundaries, releases cancelled reservations and blocks unavailable lots", () => {
+    const lot = { id: "p", status: "available" } as ParkingLot;
+    const active = {
+      lot_id: "p",
+      start_date: "2026-01-01",
+      end_date: "2026-12-31",
+      status: "active",
+    } as ParkingAllocation;
+    expect(parkingAvailable([active], lot, "2026-12-31", "2027-12-30")).toBe(
+      false,
+    );
+    expect(parkingAvailable([active], lot, "2027-01-01", "2027-12-31")).toBe(
+      true,
+    );
+    expect(
+      parkingAvailable(
+        [{ ...active, status: "cancelled" }],
+        lot,
+        "2026-06-01",
+        "2027-05-31",
+      ),
+    ).toBe(true);
+    expect(
+      parkingAvailable(
+        [],
+        { ...lot, status: "blocked" },
+        "2026-01-01",
+        "2026-12-31",
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("Local preview and reminders", () => {
   it("shows only the most relevant reminder for a pending cheque", () => {

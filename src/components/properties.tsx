@@ -3,8 +3,10 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Buildings,
   Car,
   MapPin,
+  ListBullets,
   PencilSimple,
   Plus,
   SquaresFour,
@@ -12,6 +14,8 @@ import {
 import {
   categories,
   currentLease,
+  pendingCheque,
+  todayDubai,
   unitStatus,
   type Building,
   type Unit,
@@ -31,7 +35,6 @@ import {
   statusTone,
   useList,
 } from "./ui";
-import { BuildingArt } from "./building-art";
 import { DocumentPanel } from "./documents";
 export function PropertyCover({ building }: { building: Building }) {
   const { data } = useApp();
@@ -49,10 +52,22 @@ export function PropertyCover({ building }: { building: Building }) {
       loading="lazy"
     />
   ) : (
-    <>
-      <BuildingArt variant={building.color} />
-      <span className="illustration-label">Property illustration</span>
-    </>
+    <div className="property-placeholder">
+      <span className="property-placeholder-top">
+        <Buildings size={20} />
+        {building.area}
+      </span>
+      <strong>{building.code}</strong>
+      <span className="property-placeholder-note">
+        Property photo not added
+      </span>
+      <Buildings
+        className="property-placeholder-icon"
+        size={120}
+        weight="thin"
+        aria-hidden="true"
+      />
+    </div>
   );
 }
 export function PropertyCard({ building }: { building: Building }) {
@@ -63,6 +78,20 @@ export function PropertyCard({ building }: { building: Building }) {
   ).length;
   const vacant = units.filter((u) => unitStatus(data, u) === "Vacant").length;
   const ratio = units.length ? Math.round((occupied / units.length) * 100) : 0;
+  const leaseIds = new Set(
+    data.leases
+      .filter((l) => units.some((u) => u.id === l.unit_id))
+      .map((l) => l.id),
+  );
+  const dueRent = data.cheques
+    .filter(
+      (c) =>
+        pendingCheque(c) &&
+        c.lease_id &&
+        leaseIds.has(c.lease_id) &&
+        c.due_date <= todayDubai(),
+    )
+    .reduce((s, c) => s + c.amount, 0);
   return (
     <article className="property-card">
       <Link
@@ -73,6 +102,13 @@ export function PropertyCard({ building }: { building: Building }) {
         <PropertyCover building={building} />
       </Link>
       <div className="property-card-body">
+        <div className="property-card-code">
+          {building.code}
+          <span>
+            {data.floors.filter((f) => f.building_id === building.id).length}{" "}
+            floors
+          </span>
+        </div>
         <div className="property-card-title">
           <div>
             <Link href={`/properties/${building.id}`}>
@@ -97,7 +133,7 @@ export function PropertyCard({ building }: { building: Building }) {
         <div className="property-card-stats">
           <div>
             <strong>{units.length}</strong>
-            <small>Total flats</small>
+            <small>Registered flats</small>
           </div>
           <div>
             <strong>{occupied}</strong>
@@ -116,11 +152,21 @@ export function PropertyCard({ building }: { building: Building }) {
           <span style={{ width: `${ratio}%` }} />
         </div>
         <div className="property-card-footer">
-          <span>{ratio}% occupancy</span>
+          <span>
+            {units.length
+              ? `${ratio}% occupancy`
+              : "Apartment inventory pending"}
+          </span>
           <Link className="text-link" href={`/properties/${building.id}`}>
             View property
             <ArrowRight size={14} />
           </Link>
+        </div>
+        <div className="property-finance">
+          <span>Due rental cheques</span>
+          <strong>
+            <Money value={dueRent} />
+          </strong>
         </div>
       </div>
     </article>
@@ -129,20 +175,23 @@ export function PropertyCard({ building }: { building: Building }) {
 export function Properties() {
   const { data, openForm } = useApp();
   const [query, setQuery] = useState("");
+  const [view, setView] = useState("grid");
   const [area, setArea] = useState("all");
-  const properties = data.buildings.filter(
-    (b) =>
-      `${b.name} ${b.code} ${b.area}`
-        .toLowerCase()
-        .includes(query.toLowerCase()) &&
-      (area === "all" || b.area === area),
-  );
+  const properties = [...data.buildings]
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+    .filter(
+      (b) =>
+        `${b.name} ${b.code} ${b.area}`
+          .toLowerCase()
+          .includes(query.toLowerCase()) &&
+        (area === "all" || b.area === area),
+    );
   return (
     <>
       <PageHeader
-        eyebrow="YOUR PROPERTY PORTFOLIO"
-        title="A place for every property."
-        description="Your buildings, floors and flats, all in one view."
+        eyebrow="Portfolio management"
+        title="Properties"
+        description="Manage buildings, occupancy and rental availability."
       >
         {["owner", "manager"].includes(data.membership.role) && (
           <Button variant="primary" onClick={() => openForm("building")}>
@@ -172,17 +221,30 @@ export function Properties() {
         <span className="filter-label">{properties.length} properties</span>
         <span className="view-tabs">
           <button
-            className="active"
+            className={view === "grid" ? "active" : ""}
             type="button"
             aria-label="Property grid view"
-            aria-pressed="true"
+            aria-pressed={view === "grid"}
+            onClick={() => setView("grid")}
+            data-active={view === "grid"}
           >
             <SquaresFour size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label="Property list view"
+            aria-pressed={view === "list"}
+            data-active={view === "list"}
+            onClick={() => setView("list")}
+          >
+            <ListBullets size={18} />
           </button>
         </span>
       </div>
       {properties.length ? (
-        <div className="property-grid">
+        <div
+          className={`property-grid ${view === "list" ? "property-list-view" : ""}`}
+        >
           {properties.map((b) => (
             <PropertyCard key={b.id} building={b} />
           ))}
@@ -217,7 +279,12 @@ export function Properties() {
 export function PropertyDetail({ id }: { id: string }) {
   const { data, openForm } = useApp();
   const building = data.buildings.find((b) => b.id === id);
-  const [floor, setFloor] = useState("all");
+  const [floor, setFloor] = useState(
+    () =>
+      data.floors
+        .filter((f) => f.building_id === id)
+        .sort((a, b) => a.ordinal - b.ordinal)[0]?.id ?? "all",
+  );
   const [selected, setSelected] = useState<Unit | null>(null);
   if (!building)
     return (
@@ -270,10 +337,10 @@ export function PropertyDetail({ id }: { id: string }) {
         </div>
         <div className="panel property-info">
           <Badge tone="mint">{building.code}</Badge>
-          <h2>Thoughtfully organised.</h2>
+          <h2>Property details</h2>
           <p>
             {building.notes ||
-              "Your property details, amenities and rental availability."}
+              "Building information, amenities and rental availability."}
           </p>
           <div className="amenity-chips">
             {building.amenities.map((a) => (
@@ -326,6 +393,20 @@ export function PropertyDetail({ id }: { id: string }) {
         title="Floor by floor"
         description="Choose a floor to explore its flats."
       >
+        <select
+          className="filter-select"
+          aria-label="Choose floor"
+          value={floor}
+          onChange={(e) => setFloor(e.target.value)}
+        >
+          <option value="all">All floors</option>
+          {floors.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+              {f.purpose === "service" ? " · Gym & services" : ""}
+            </option>
+          ))}
+        </select>
         {manage && (
           <Button onClick={() => openForm("floor", { building_id: id })}>
             <Plus size={16} />
@@ -337,6 +418,7 @@ export function PropertyDetail({ id }: { id: string }) {
         <button
           type="button"
           className={floor === "all" ? "active" : ""}
+          aria-pressed={floor === "all"}
           onClick={() => setFloor("all")}
         >
           All floors · {units.length}
@@ -346,44 +428,104 @@ export function PropertyDetail({ id }: { id: string }) {
             type="button"
             key={f.id}
             className={floor === f.id ? "active" : ""}
+            aria-pressed={floor === f.id}
             onClick={() => setFloor(f.id)}
           >
             {f.name} · {units.filter((u) => u.floor_id === f.id).length}
           </button>
         ))}
       </div>
-      {units.length ? (
-        <div className="units-grid">
-          {units
-            .filter((u) => floor === "all" || u.floor_id === floor)
-            .sort((a, b) =>
-              a.code.localeCompare(b.code, undefined, { numeric: true }),
-            )
-            .map((u) => {
-              const status = unitStatus(data, u);
-              return (
-                <button
-                  type="button"
-                  key={u.id}
-                  className="unit-card"
-                  onClick={() => setSelected(u)}
-                >
-                  <div className="unit-card-head">
-                    <strong>Flat {u.code}</strong>
-                    <Badge tone={statusTone(status)}>{status}</Badge>
-                  </div>
-                  <p>
-                    {u.category} ·{" "}
-                    {u.area_sqft
-                      ? `${u.area_sqft.toLocaleString()} sq ft`
-                      : "Area not entered"}
+      {floors.length ? (
+        <div className="floor-sections">
+          {floors
+            .filter((f) => floor === "all" || f.id === floor)
+            .map((f) => (
+              <section className="floor-section" key={f.id}>
+                <div className="floor-section-heading">
+                  <h3>{f.name}</h3>
+                  {f.purpose !== "unspecified" && (
+                    <Badge
+                      tone={f.purpose === "residential" ? "success" : "neutral"}
+                    >
+                      {f.purpose === "service" ? "Gym & services" : f.purpose}
+                    </Badge>
+                  )}
+                  <span>
+                    {units.filter((u) => u.floor_id === f.id).length} flats
+                  </span>
+                  {manage && (
+                    <Button
+                      variant="ghost"
+                      className="floor-edit"
+                      aria-label={`Edit ${f.name}`}
+                      onClick={() => openForm("floor", { ...f })}
+                    >
+                      <PencilSimple size={16} />
+                      Edit floor
+                    </Button>
+                  )}
+                </div>
+                <div className="units-grid">
+                  {units
+                    .filter((u) => u.floor_id === f.id)
+                    .sort((a, b) =>
+                      a.code.localeCompare(b.code, undefined, {
+                        numeric: true,
+                      }),
+                    )
+                    .map((u) => {
+                      const status = unitStatus(data, u);
+                      const current = currentLease(data, u.id);
+                      return (
+                        <button
+                          type="button"
+                          key={u.id}
+                          className={`unit-card status-${status.toLowerCase()}`}
+                          onClick={() => setSelected(u)}
+                        >
+                          <div className="unit-card-head">
+                            <strong>Flat {u.code}</strong>
+                            <Badge tone={statusTone(status)}>{status}</Badge>
+                          </div>
+                          <p>
+                            {u.category} ·{" "}
+                            {u.area_sqft
+                              ? `${u.area_sqft.toLocaleString()} sq ft`
+                              : "Area not entered"}
+                          </p>
+                          <p>
+                            {data.floors.find((f) => f.id === u.floor_id)?.name}
+                          </p>
+                          <Money value={u.monthly_rent} />
+                          <p>per month</p>
+                          <div className="unit-tenant">
+                            {current
+                              ? data.tenants.find(
+                                  (t) => t.id === current.tenant_id,
+                                )?.name
+                              : status === "Vacant"
+                                ? "Available for a new tenancy"
+                                : status === "Reserved"
+                                  ? "Upcoming tenancy"
+                                  : "Unavailable for letting"}
+                            <ArrowRight size={14} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+                {!units.some((u) => u.floor_id === f.id) && (
+                  <p className="floor-empty">
+                    {f.purpose === "parking"
+                      ? "Parking level. Apartments cannot be added here."
+                      : f.purpose === "service"
+                        ? "Gym and service area. No apartments on this floor."
+                        : "Apartment details have not been added on this floor yet."}
                   </p>
-                  <p>{data.floors.find((f) => f.id === u.floor_id)?.name}</p>
-                  <Money value={u.monthly_rent} />
-                  <p>per month</p>
-                </button>
-              );
-            })}
+                )}
+                {f.notes && <p className="floor-notes">{f.notes}</p>}
+              </section>
+            ))}
         </div>
       ) : (
         <div className="panel" style={{ marginBottom: 24 }}>
@@ -521,11 +663,11 @@ export function UnitModal({
     </Modal>
   );
 }
-export function Units() {
+export function Units({ initialStatus = "all" }: { initialStatus?: string }) {
   const { data, openForm } = useApp();
   const [query, setQuery] = useState("");
   const [building, setBuilding] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
   const list = useList(
@@ -541,8 +683,8 @@ export function Units() {
   return (
     <>
       <PageHeader
-        eyebrow="FLOORS, FLATS & POSSIBILITIES"
-        title="Every flat, in view."
+        eyebrow="Apartment inventory"
+        title="Flats"
         description="Find the right space and keep its details up to date."
       >
         {["owner", "manager"].includes(data.membership.role) && (
