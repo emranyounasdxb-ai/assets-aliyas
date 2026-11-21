@@ -4,6 +4,10 @@ import { Writable } from "node:stream";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { databasePool, one, sql, closeDatabase } from "../database/sql.mjs";
+import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+} from "../database/passwords.mjs";
 
 assert.ok(process.stdin.isTTY, "Run setup in the private hosting terminal");
 assert.ok(
@@ -29,9 +33,11 @@ const abort = new AbortController();
 terminal.on("SIGINT", () => abort.abort());
 async function ask(label, hidden = false) {
   muted = hidden;
-  process.stdout.write(label);
   try {
-    return await terminal.question("", { signal: abort.signal });
+    const answer = terminal.question(label, { signal: abort.signal });
+    // Hidden questions mute readline's complete redraw, including its prompt.
+    if (hidden) process.stdout.write(label);
+    return await answer;
   } finally {
     if (hidden) process.stdout.write("\n");
     muted = false;
@@ -58,10 +64,14 @@ try {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 180,
     "Enter a valid admin email",
   );
-  let password = await ask("Password (16-200 characters, hidden): ", true);
+  let password = await ask(
+    `Password (${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters, hidden): `,
+    true,
+  );
   assert.ok(
-    password.length >= 16 && password.length <= 200,
-    "Use a password of 16-200 characters",
+    password.length >= MIN_PASSWORD_LENGTH &&
+      password.length <= MAX_PASSWORD_LENGTH,
+    `Use a password of ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`,
   );
   assert.equal(
     password === (await ask("Confirm password (hidden): ", true)),

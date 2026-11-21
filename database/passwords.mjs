@@ -1,13 +1,17 @@
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
 const derive = promisify(scrypt);
+export const MIN_PASSWORD_LENGTH = 10;
+export const MAX_PASSWORD_LENGTH = 200;
 export async function hashPassword(password) {
   if (
     typeof password !== "string" ||
-    password.length < 12 ||
-    password.length > 200
+    password.length < MIN_PASSWORD_LENGTH ||
+    password.length > MAX_PASSWORD_LENGTH
   )
-    throw new Error("Use a password between 12 and 200 characters");
+    throw new Error(
+      `Use a password between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`,
+    );
   const salt = randomBytes(24).toString("hex");
   const hash = await derive(password, salt, 64, {
     N: 131072,

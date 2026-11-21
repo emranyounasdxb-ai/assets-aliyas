@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+} from "../database/passwords.mjs";
 import { adminDatabase } from "../database/client.mjs";
 import {
   databasePool,
@@ -17,8 +21,10 @@ assert.ok(
 );
 assert.ok(name && name.length <= 160, "Configure ADMIN_NAME privately");
 assert.ok(
-  password && password.length >= 16 && password.length <= 200,
-  "Configure a private admin password of 16–200 characters",
+  password &&
+    password.length >= MIN_PASSWORD_LENGTH &&
+    password.length <= MAX_PASSWORD_LENGTH,
+  `Configure a private admin password of ${MIN_PASSWORD_LENGTH}–${MAX_PASSWORD_LENGTH} characters`,
 );
 const existing = await one(
   databasePool(),
