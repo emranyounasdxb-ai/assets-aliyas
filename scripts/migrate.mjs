@@ -60,6 +60,27 @@ try {
     "insert ignore into schema_migrations(version,checksum) values(?,?)",
     ["002_property_media", mediaChecksum],
   );
+  const agents = createStatements().filter((s) =>
+    /^create table if not exists `agent/.test(s),
+  );
+  const agentChecksum = createHash("sha256")
+    .update(agents.join("\n"))
+    .digest("hex");
+  const appliedAgents = await sql(
+    connection,
+    "select checksum from schema_migrations where version=?",
+    ["003_agent_commissions"],
+  );
+  assert.ok(
+    !appliedAgents.length || appliedAgents[0].checksum === agentChecksum,
+    "Agent commission migration checksum changed",
+  );
+  for (const statement of agents) await sql(connection, statement);
+  await sql(
+    connection,
+    "insert ignore into schema_migrations(version,checksum) values(?,?)",
+    ["003_agent_commissions", agentChecksum],
+  );
   console.log("Assets database schema ready; existing records preserved.");
 } finally {
   connection.release();

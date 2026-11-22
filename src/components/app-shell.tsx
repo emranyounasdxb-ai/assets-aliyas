@@ -42,6 +42,7 @@ const mainNav = [
   { href: "/shops", label: "Shops", icon: Storefront },
   { href: "/parking", label: "Parking", icon: Car },
   { href: "/tenants", label: "Tenants", icon: Users },
+  { href: "/agents", label: "Agents", icon: Users },
 ];
 const financeNav = [
   { href: "/agreements", label: "Agreements", icon: FileText },

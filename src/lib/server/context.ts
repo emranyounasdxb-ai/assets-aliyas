@@ -87,6 +87,10 @@ export async function loadData(): Promise<AppData> {
     "property_covers",
     "notifications",
     "activities",
+    "agents",
+    "agent_commissions",
+    "agent_receipts",
+    "agent_commission_events",
   ] as const;
   const results = await Promise.all(
     tables.map(async (table) => {
@@ -153,6 +157,10 @@ export async function loadData(): Promise<AppData> {
     parkingLots: rows.parking_lots,
     parkingAllocations: rows.parking_allocations,
     documents: rows.documents,
+    agents: rows.agents,
+    agentCommissions: rows.agent_commissions,
+    agentReceipts: rows.agent_receipts,
+    agentCommissionEvents: rows.agent_commission_events,
     propertyCovers: rows.property_covers,
     notifications: rows.notifications,
     activities: rows.activities,

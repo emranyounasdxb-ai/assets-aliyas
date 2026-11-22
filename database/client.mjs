@@ -235,6 +235,12 @@ class Query {
           `exists(select 1 from memberships m where m.workspace_id=t.${workspace} and m.user_id=?)`,
         );
         values.push(this.client.userId);
+        if (this.table.startsWith("agent")) {
+          clauses.push(
+            "exists(select 1 from memberships m where m.workspace_id=t.workspace_id and m.user_id=? and m.role in ('owner','manager','accountant'))",
+          );
+          values.push(this.client.userId);
+        }
         if (this.table === "documents") {
           clauses.push(
             "(exists(select 1 from memberships m where m.workspace_id=t.workspace_id and m.user_id=? and m.role in ('owner','manager','accountant')) or (t.target_type in ('building','floor','unit') and t.category in ('Photo','Floor plan')))",
