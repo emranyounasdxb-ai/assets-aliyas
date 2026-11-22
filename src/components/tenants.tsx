@@ -29,6 +29,7 @@ import {
 import { DocumentPanel } from "./documents";
 import { LedgerTable, SecurityPanel } from "./accounts";
 import { ParkingAssignments } from "./parking-allocations";
+import { CommissionPanel } from "./agents";
 export function Tenants() {
   const { data, openForm } = useApp();
   const [query, setQuery] = useState("");
@@ -256,6 +257,9 @@ export function TenantDetail({ id }: { id: string }) {
           },
           { value: "agreements", label: "Agreements", count: leases.length },
           { value: "account", label: "Account" },
+          ...(["owner", "manager", "accountant"].includes(data.membership.role)
+            ? [{ value: "commissions", label: "Agent commission" }]
+            : []),
           {
             value: "parking",
             label: "Parking",
@@ -434,6 +438,14 @@ export function TenantDetail({ id }: { id: string }) {
                 />
               )}
             </section>
+          </div>
+          <div
+            role="tabpanel"
+            id={`tenant-${id}-panel-commissions`}
+            aria-labelledby={`tenant-${id}-tab-commissions`}
+            hidden={tab !== "commissions"}
+          >
+            <CommissionPanel tenantId={id} />
           </div>
           <div
             role="tabpanel"

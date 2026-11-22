@@ -522,7 +522,7 @@ export function SaveFooter({
 }) {
   return (
     <div className="modal-footer">
-      <Button type="button" onClick={onClose}>
+      <Button type="button" disabled={pending} onClick={onClose}>
         Cancel
       </Button>
       <Button variant="primary" type="submit" disabled={pending}>

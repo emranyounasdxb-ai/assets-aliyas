@@ -70,7 +70,7 @@ it("preserves the deployed version 001 checksum and adds media without altering 
   expect(
     createHash("sha256").update(createStatements(1).join("\n")).digest("hex"),
   ).toBe("d54a012dd0f4bbe95e19c6b191910671df38e7fe60d9e9a95a02beb87420cbea");
-  const additions = createStatements().filter(
+  const additions = createStatements(2).filter(
     (s) => !createStatements(1).includes(s),
   );
   expect(additions).toHaveLength(1);

@@ -23,6 +23,7 @@ import {
 import { DocumentPanel } from "./documents";
 import { ChequeTable } from "./accounts";
 import { ParkingAssignments } from "./parking-allocations";
+import { CommissionPanel } from "./agents";
 export function Agreements({
   initialStatus = "all",
 }: {
@@ -485,6 +486,9 @@ export function AgreementDetail({ id }: { id: string }) {
       </section>
       <div className="parking-section no-print">
         <ParkingAssignments leaseId={id} />
+      </div>
+      <div className="agent-section no-print">
+        <CommissionPanel leaseId={id} />
       </div>
       <div style={{ marginTop: 24 }} className="no-print">
         <DocumentPanel

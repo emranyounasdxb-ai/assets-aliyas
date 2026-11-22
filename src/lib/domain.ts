@@ -173,6 +173,10 @@ export interface Activity {
   created_at: string;
 }
 export interface AppData {
+  agents: Agent[];
+  agentCommissions: AgentCommission[];
+  agentReceipts: AgentReceipt[];
+  agentCommissionEvents: AgentCommissionEvent[];
   workspace: Workspace;
   workspaces: Workspace[];
   membership: Membership;
@@ -194,6 +198,68 @@ export interface AppData {
   activities: Activity[];
 }
 export const categories = ["Studio", "1 BHK", "2 BHK", "3 BHK"] as const;
+export interface Agent {
+  id: string;
+  workspace_id: string;
+  name: string;
+  phone: string;
+  email: string;
+  company: string;
+  status: "active" | "inactive";
+  notes: string;
+  created_at: string;
+}
+export interface AgentCommission {
+  id: string;
+  workspace_id: string;
+  agent_id: string;
+  lease_id: string;
+  amount: number | null;
+  notes: string;
+  revision: number;
+  created_at: string;
+}
+export interface AgentReceipt {
+  id: string;
+  workspace_id: string;
+  commission_id: string;
+  kind: "received" | "reversal";
+  amount: number;
+  entry_date: string;
+  method: "cash" | "bank" | "cheque";
+  reference: string;
+  notes: string;
+  receipt_document_id: string | null;
+  reverses: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+export interface AgentCommissionEvent {
+  id: string;
+  commission_id: string;
+  old_amount: number | null;
+  new_amount: number | null;
+  old_agent_id: string | null;
+  new_agent_id: string;
+  reason: string;
+  changed_by: string;
+  created_at: string;
+}
+export function commissionBalance(
+  commission: AgentCommission,
+  receipts: AgentReceipt[],
+) {
+  const received = receipts
+    .filter((r) => r.commission_id === commission.id)
+    .reduce(
+      (sum, r) => sum + (r.kind === "received" ? r.amount : -r.amount),
+      0,
+    );
+  return {
+    received,
+    pending: commission.amount === null ? null : commission.amount - received,
+  };
+}
 export function propertyCover(
   data: Pick<AppData, "documents" | "propertyCovers">,
   buildingId: string,

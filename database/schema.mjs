@@ -189,8 +189,69 @@ export const tables = {
     resource_id: "char(36) not null",
     action: "varchar(40) not null",
   },
+  agents: {
+    workspace_id: "char(36) not null",
+    name: "varchar(160) not null",
+    phone: "varchar(40) not null default ''",
+    email: "varchar(180) not null default ''",
+    company: "varchar(160) not null default ''",
+    status: "enum('active','inactive') not null default 'active'",
+    notes: "varchar(2000) not null default ''",
+  },
+  agent_commissions: {
+    workspace_id: "char(36) not null",
+    agent_id: "char(36) not null",
+    lease_id: "char(36) not null",
+    amount: "bigint check(amount between 0 and 10000000000)",
+    revision: "int not null default 1 check(revision>0)",
+    notes: "varchar(1000) not null default ''",
+  },
+  agent_receipts: {
+    workspace_id: "char(36) not null",
+    commission_id: "char(36) not null",
+    kind: "enum('received','reversal') not null",
+    amount: "bigint not null check(amount between 1 and 10000000000)",
+    entry_date: "date not null",
+    method: "enum('cash','bank','cheque') not null",
+    reference: "varchar(120) not null",
+    notes: "varchar(1000) not null default ''",
+    receipt_document_id: "char(36)",
+    reverses: "char(36)",
+    request_key: "char(36) not null unique",
+    recorded_by: "char(36) not null",
+  },
+  agent_commission_events: {
+    workspace_id: "char(36) not null",
+    commission_id: "char(36) not null",
+    old_amount: "bigint",
+    new_amount: "bigint",
+    old_agent_id: "char(36)",
+    new_agent_id: "char(36) not null",
+    reason: "varchar(1000) not null",
+    changed_by: "char(36) not null",
+  },
 };
 export const constraints = {
+  agent_commissions: [
+    "unique(lease_id)",
+    "foreign key(agent_id,workspace_id) references agents(id,workspace_id)",
+    "foreign key(lease_id,workspace_id) references leases(id,workspace_id)",
+  ],
+  agent_receipts: [
+    "unique(reverses)",
+    "unique(commission_id,kind,reference)",
+    "check((kind='reversal')=(reverses is not null))",
+    "foreign key(commission_id,workspace_id) references agent_commissions(id,workspace_id)",
+    "foreign key(receipt_document_id,workspace_id) references documents(id,workspace_id)",
+    "foreign key(reverses,workspace_id) references agent_receipts(id,workspace_id)",
+    "foreign key(recorded_by) references users(id)",
+  ],
+  agent_commission_events: [
+    "foreign key(commission_id,workspace_id) references agent_commissions(id,workspace_id)",
+    "foreign key(old_agent_id,workspace_id) references agents(id,workspace_id)",
+    "foreign key(new_agent_id,workspace_id) references agents(id,workspace_id)",
+    "foreign key(changed_by) references users(id)",
+  ],
   sessions: ["foreign key(user_id) references users(id) on delete cascade"],
   memberships: [
     "unique(workspace_id,user_id)",
@@ -264,9 +325,13 @@ export const constraints = {
   ],
 };
 // Version 001 is immutable: existing installations verify its exact checksum.
-export function createStatements(version = 2) {
+export function createStatements(version = 3) {
   return Object.entries(tables)
-    .filter(([name]) => version > 1 || name !== "property_covers")
+    .filter(
+      ([name]) =>
+        version >=
+        (name.startsWith("agent") ? 3 : name === "property_covers" ? 2 : 1),
+    )
     .map(
       ([name, columns]) =>
         `create table if not exists \`${name}\` (id char(36) primary key,created_at datetime(3) not null default current_timestamp(3),${Object.entries(

@@ -73,9 +73,19 @@ async function cleanupWorkspace(id: string) {
         "notification_id",
         notices.map((n) => n.id),
       );
+  const reversals = await admin
+    .from("agent_receipts")
+    .delete()
+    .eq("workspace_id", id)
+    .eq("kind", "reversal");
+  if (reversals.error) throw reversals.error;
   for (const table of [
     "activities",
     "notifications",
+    "agent_receipts",
+    "agent_commission_events",
+    "agent_commissions",
+    "agents",
     "property_covers",
     "documents",
     "ledger",

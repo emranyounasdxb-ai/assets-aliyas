@@ -79,6 +79,7 @@ export function RecordForm({
   const [starts, setStarts] = useState(todayDubai());
   const [checks, setChecks] = useState(4);
   const [parkingIds, setParkingIds] = useState<string[]>([]);
+  const [agentId, setAgentId] = useState("");
   const parkingTotal = data.parkingLots
     .filter((l) => parkingIds.includes(l.id))
     .reduce((s, l) => s + annualParkingCharge(l), 0);
@@ -607,6 +608,44 @@ export function RecordForm({
                   ))}
                 </select>
               </Field>
+              <fieldset className="parking-picker span-2">
+                <legend>Agent commission (optional)</legend>
+                <p className="parking-help">
+                  The customer pays the agent directly. Enter the agreed
+                  commission manually; it is tracked separately from rent.
+                </p>
+                <div className="form-grid">
+                  <Field label="Agent">
+                    <select
+                      name="agent_id"
+                      value={agentId}
+                      onChange={(e) => setAgentId(e.target.value)}
+                    >
+                      <option value="">No agent selected</option>
+                      {data.agents
+                        .filter((a) => a.status === "active")
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label="Commission amount (AED)"
+                    hint="Leave blank until the amount is agreed."
+                  >
+                    <input
+                      name="commission_amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      max="99999999"
+                      disabled={!agentId}
+                    />
+                  </Field>
+                </div>
+              </fieldset>
               <fieldset className="parking-picker span-2">
                 <legend>Paid parking (optional)</legend>
                 <p className="parking-help">

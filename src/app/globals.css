@@ -1522,6 +1522,54 @@ td.cell-main .avatar {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
+.agent-section {
+  margin-top: 24px;
+}
+.commission-panel .section-header {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.commission-panel .section-header > div {
+  flex: 1 1 320px;
+}
+.commission-panel .section-header p {
+  max-width: 560px;
+}
+.commission-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.commission-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.commission-confirm input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+.commission-history {
+  margin-top: 24px;
+}
+.commission-history summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px 0;
+}
+.commission-history > div {
+  padding: 12px 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.commission-history p {
+  margin-top: 4px;
+  color: var(--muted);
+}
 .property-media {
   margin-bottom: 24px;
   scroll-margin-top: 24px;

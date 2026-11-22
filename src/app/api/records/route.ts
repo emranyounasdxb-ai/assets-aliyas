@@ -34,6 +34,68 @@ export async function POST(request: Request) {
       error: { code?: string; message: string } | null;
     };
     switch (body.action) {
+      case "agent": {
+        requireRole(member, true);
+        const v = z
+          .object({
+            id: uuid.optional(),
+            name: text(),
+            phone: optionalText(40),
+            email: z.union([z.email().max(180), z.literal("")]).default(""),
+            company: optionalText(),
+            status: z.enum(["active", "inactive"]).default("active"),
+            notes: optionalText(2000),
+          })
+          .parse(p);
+        const { id, ...details } = v;
+        result = await db.rpc("agent_save", { w, id, details });
+        break;
+      }
+      case "agent_commission": {
+        requireRole(member, true);
+        const v = z
+          .object({
+            id: uuid.optional(),
+            lease_id: uuid,
+            agent_id: uuid,
+            amount: z.union([amount, z.literal("").transform(() => null)]),
+            notes: optionalText(1000),
+            reason: optionalText(1000),
+            expected_revision: z.number().int().min(1).optional(),
+          })
+          .parse(p);
+        result = await db.rpc("agent_commission_save", { w, ...v });
+        break;
+      }
+      case "agent_receipt": {
+        requireRole(member, true);
+        const v = z
+          .object({
+            commission_id: uuid,
+            amount: amount.refine((n) => n > 0),
+            entry_date: date,
+            method: z.enum(["cash", "bank", "cheque"]),
+            reference: text(120),
+            notes: optionalText(1000),
+            receipt_document_id: z
+              .union([uuid, z.literal("")])
+              .transform((v) => v || null)
+              .optional(),
+            request_key: uuid,
+            confirmed: z.literal(true),
+          })
+          .parse(p);
+        result = await db.rpc("agent_receipt_record", { w, ...v });
+        break;
+      }
+      case "agent_receipt_reverse": {
+        requireRole(member, true);
+        const v = z
+          .object({ id: uuid, reason: text(1000), request_key: uuid })
+          .parse(p);
+        result = await db.rpc("agent_receipt_reverse", { w, ...v });
+        break;
+      }
       case "property_cover": {
         requireRole(member, true);
         result = await db.rpc("set_property_cover", {
@@ -255,8 +317,14 @@ export async function POST(request: Request) {
             bank: optionalText(120),
             notes: optionalText(2000),
             parking_lot_ids: z.array(uuid).max(20).default([]),
+            agent_id: z.union([uuid, z.literal("")]).default(""),
+            commission_amount: z
+              .union([amount, z.literal("").transform(() => null)])
+              .default(null),
           })
           .parse(p);
+        if (!v.agent_id && v.commission_amount !== null)
+          throw new AppError("Choose an agent for the commission amount");
         result = await db.rpc(
           v.parking_lot_ids.length
             ? "create_lease_with_parking"
@@ -271,6 +339,8 @@ export async function POST(request: Request) {
             ref: v.reference,
             bank_name: v.bank,
             notes_text: v.notes,
+            agent_id: v.agent_id || null,
+            commission_amount: v.commission_amount,
             ...(v.parking_lot_ids.length ? { lot_ids: v.parking_lot_ids } : {}),
           },
         );

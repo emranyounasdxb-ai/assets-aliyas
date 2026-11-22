@@ -42,6 +42,7 @@ import {
 } from "./ui";
 import { DocumentPanel } from "./documents";
 import { PropertyMedia } from "./property-media";
+import { CommissionPanel } from "./agents";
 export function PropertyCover({ building }: { building: Building }) {
   const { data } = useApp();
   const photo = propertyCover(data, building.id);
@@ -553,6 +554,9 @@ export function PropertyDetail({ id }: { id: string }) {
           />
         </div>
       )}
+      <div className="agent-section">
+        <CommissionPanel buildingId={id} />
+      </div>
       {selected && (
         <UnitModal id={selected.id} onClose={() => setSelected(null)} />
       )}

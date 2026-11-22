@@ -11,6 +11,7 @@ import {
   fail,
 } from "./sql.mjs";
 import { permission } from "./client.mjs";
+import { agentOperation, saveAgentCommission } from "./agents.mjs";
 export const today = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(
     new Date(),
@@ -241,6 +242,10 @@ export async function operation(client, name, p) {
     "register_scanned_document",
     "set_property_cover",
     "manage_document",
+    "agent_save",
+    "agent_commission_save",
+    "agent_receipt_record",
+    "agent_receipt_reverse",
   ];
   if (!operations.includes(name)) fail("Unknown operation");
   let workspace = p.w || p.p?.workspace_id;
@@ -262,6 +267,8 @@ export async function operation(client, name, p) {
   }
   if (!workspace) fail("Record not found or permission denied");
   const execute = async (connection) => {
+    if (name.startsWith("agent_"))
+      return agentOperation(connection, client, name, workspace, p);
     if (name === "register_scanned_document") {
       client.requireAdmin();
       const doc = p.p;
@@ -324,6 +331,16 @@ export async function operation(client, name, p) {
           fail("Choose a photo from this property");
         await setPropertyCover(connection, client, doc);
       } else if (p.archive) {
+        if (
+          await one(
+            connection,
+            "select id from agent_receipts where receipt_document_id=? and workspace_id=? limit 1",
+            [doc.id, workspace],
+          )
+        )
+          fail(
+            "This document supports a recorded commission payment and cannot be archived",
+          );
         await sql(
           connection,
           "delete from property_covers where document_id=? and workspace_id=?",
@@ -459,6 +476,13 @@ export async function operation(client, name, p) {
           await find(connection, "leases", id, workspace),
           p.lot_ids,
         );
+      if (p.agent_id)
+        await saveAgentCommission(connection, client, workspace, {
+          lease_id: id,
+          agent_id: p.agent_id,
+          amount: p.commission_amount,
+          notes: "",
+        });
       return id;
     }
     if (name === "allocate_parking")
