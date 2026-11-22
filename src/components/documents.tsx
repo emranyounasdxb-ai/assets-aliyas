@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowSquareOut,
   UploadSimple,
@@ -33,7 +33,7 @@ import {
   StableRegion,
 } from "./ui";
 type Target = DocumentRecord["target_type"];
-function fileSize(size: number) {
+export function fileSize(size: number) {
   return size < 1024 * 1024
     ? `${Math.ceil(size / 1024)} KB`
     : `${(size / 1024 / 1024).toFixed(1)} MB`;
@@ -42,11 +42,15 @@ export function UploadModal({
   targetType,
   targetId,
   replace,
+  defaultCategory,
+  onUploaded,
   onClose,
 }: {
   targetType?: Target;
   targetId?: string;
   replace?: DocumentRecord;
+  defaultCategory?: string;
+  onUploaded?: (category: string) => void;
   onClose: () => void;
 }) {
   const { data, notify, refresh } = useApp();
@@ -74,74 +78,131 @@ export function UploadModal({
   );
   const [category, setCategory] = useState(
     replace?.category ??
+      defaultCategory ??
       (["building", "floor", "unit"].includes(type) ? "Photo" : "Other"),
   );
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<
+    { file: File; key: string; done: boolean }[]
+  >([]);
+  const [makeCover, setMakeCover] = useState(false);
   const [pending, setPending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
-  function submit(event: FormEvent) {
+  const [activeFile, setActiveFile] = useState(0);
+  const [previews, setPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = files.map(({ file }) =>
+      file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+    );
+    setPreviews(urls);
+    return () =>
+      urls.forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+  }, [files]);
+  const property = type === "building";
+  const partial = files.some((f) => f.done);
+  function resetKeys() {
+    setFiles((old) =>
+      old.map((item) => ({ ...item, key: crypto.randomUUID() })),
+    );
+  }
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!file) {
+    if (!files.length) {
       setError("Choose a file to upload.");
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      setError("This file is over 20 MB. Choose a smaller file.");
+    if (
+      files.some(({ file }) => file.size > 20 * 1024 * 1024 || file.size < 1)
+    ) {
+      setError("Choose non-empty files up to 20 MB each.");
       return;
     }
     setError("");
     setPending(true);
-    setProgress(0);
-    const form = new FormData();
-    form.set("file", file);
-    form.set("target_type", type);
-    form.set("target_id", target);
-    form.set("category", category);
-    form.set("request_key", requestKey);
-    if (replace) form.set("replaces", replace.id);
-    const xhr = new XMLHttpRequest();
-    xhrRef.current = xhr;
-    xhr.open("POST", "/api/documents");
-    xhr.timeout = 120000;
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable)
-        setProgress(Math.round((e.loaded / e.total) * 100));
-    };
-    xhr.onload = async () => {
-      let result: { error?: string } = {};
-      try {
-        result = JSON.parse(xhr.responseText);
-      } catch {}
-      if (xhr.status >= 200 && xhr.status < 300) {
-        notify(
-          replace
-            ? "New document version saved. The original is preserved."
-            : "Document scanned and saved privately.",
+    try {
+      for (let index = 0; index < files.length; index++) {
+        const item = files[index];
+        if (item.done) continue;
+        setActiveFile(index + 1);
+        setProgress(0);
+        const form = new FormData();
+        form.set("file", item.file);
+        form.set("target_type", type);
+        form.set("target_id", target);
+        form.set("category", category);
+        form.set("request_key", item.key);
+        if (replace) form.set("replaces", replace.id);
+        if (makeCover && index === 0 && property && category === "Photo")
+          form.set("make_cover", "1");
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/documents");
+          xhr.timeout = 120000;
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable)
+              setProgress(Math.round((e.loaded / e.total) * 100));
+          };
+          xhr.onload = () => {
+            let result: { error?: string } = {};
+            try {
+              result = JSON.parse(xhr.responseText);
+            } catch {}
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else
+              reject(
+                new Error(result.error ?? "Upload failed. Please try again."),
+              );
+          };
+          xhr.onerror = () =>
+            reject(
+              new Error(
+                "The connection was interrupted. Retry to continue uploading.",
+              ),
+            );
+          xhr.ontimeout = () =>
+            reject(
+              new Error(
+                "The upload took too long. Retry to continue uploading.",
+              ),
+            );
+          xhr.send(form);
+        });
+        setFiles((old) =>
+          old.map((entry) =>
+            entry.key === item.key ? { ...entry, done: true } : entry,
+          ),
         );
-        await refresh(true);
-        setPending(false);
-        onClose();
-      } else {
-        setPending(false);
-        setError(result.error ?? "Upload failed. Please try again.");
       }
-    };
-    xhr.onerror = () => {
+      notify(
+        replace
+          ? "New document version saved. The original is preserved."
+          : `${files.length === 1 ? "File" : `${files.length} files`} scanned and saved privately.`,
+      );
+      await refresh(true);
+      onUploaded?.(category);
+      onClose();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Upload failed. Please try again.",
+      );
+      await refresh(true);
+    } finally {
       setPending(false);
-      setError("The connection was interrupted. Try the upload again.");
-    };
-    xhr.ontimeout = () => {
-      setPending(false);
-      setError("The upload took too long. Please try again.");
-    };
-    xhr.send(form);
+    }
   }
   return (
     <Modal
-      title={replace ? "Upload a new version" : "Upload a document"}
+      title={
+        replace
+          ? "Upload a new version"
+          : property
+            ? category === "Photo"
+              ? "Add property photos"
+              : "Add property documents"
+            : "Upload a document"
+      }
       description={
         replace
           ? "The previous version will remain available in document history."
@@ -150,104 +211,168 @@ export function UploadModal({
       onClose={pending ? () => {} : onClose}
     >
       <form onSubmit={submit}>
-        <div className="form-grid">
-          {!targetId && !replace && (
-            <>
-              <Field label="Link to">
-                <select
-                  value={type}
+        <fieldset className="upload-fields" disabled={pending || partial}>
+          <div className="form-grid">
+            {!targetId && !replace && (
+              <>
+                <Field label="Link to">
+                  <select
+                    value={type}
+                    onChange={(e) => {
+                      const t = e.target.value as Target;
+                      setType(t);
+                      setTarget(choices(t)[0]?.id ?? "");
+                      resetKeys();
+                      setCategory(
+                        ["building", "floor", "unit"].includes(t)
+                          ? "Photo"
+                          : "Other",
+                      );
+                    }}
+                  >
+                    {["tenant", "building", "floor", "unit", "lease"].map(
+                      (t) => (
+                        <option key={t} value={t}>
+                          {
+                            {
+                              tenant: "Tenant",
+                              building: "Property",
+                              floor: "Floor",
+                              unit: "Flat or shop",
+                              lease: "Agreement",
+                            }[t]
+                          }
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </Field>
+                <Field label="Record">
+                  <select
+                    required
+                    value={target}
+                    onChange={(e) => {
+                      setTarget(e.target.value);
+                      resetKeys();
+                    }}
+                  >
+                    <option value="">Choose a record</option>
+                    {choices(type).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            )}
+            <Field wide label="Document category">
+              <select
+                disabled={!!replace}
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  resetKeys();
+                }}
+              >
+                {(property
+                  ? ["Photo", "Floor plan", "Contract", "Other"]
+                  : documentCategories
+                ).map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+            <div className="span-2">
+              <label className="upload-drop">
+                <UploadSimple size={30} />
+                <strong>
+                  {files.length
+                    ? `${files.length} file${files.length === 1 ? "" : "s"} selected`
+                    : property && !replace
+                      ? "Choose files"
+                      : "Choose your file"}
+                </strong>
+                <span>
+                  {category === "Photo"
+                    ? "JPG, PNG or WebP"
+                    : "PDF, JPG, PNG or WebP"}{" "}
+                  · Up to 20 MB per file
+                </span>
+                <input
+                  type="file"
+                  aria-label="Choose document file"
+                  required
+                  multiple={property && !replace}
+                  accept={
+                    category === "Photo"
+                      ? "image/jpeg,image/png,image/webp"
+                      : "application/pdf,image/jpeg,image/png,image/webp"
+                  }
+                  disabled={pending}
                   onChange={(e) => {
-                    const t = e.target.value as Target;
-                    setType(t);
-                    setTarget(choices(t)[0]?.id ?? "");
-                    setRequestKey(crypto.randomUUID());
-                    setCategory(
-                      ["building", "floor", "unit"].includes(t)
-                        ? "Photo"
-                        : "Other",
+                    const selected = Array.from(e.target.files ?? []);
+                    if (selected.length > 20) {
+                      setError("Choose up to 20 files at a time.");
+                      e.target.value = "";
+                      return;
+                    }
+                    setError("");
+                    setFiles(
+                      selected.map((file) => ({
+                        file,
+                        key: crypto.randomUUID(),
+                        done: false,
+                      })),
                     );
                   }}
-                >
-                  {["tenant", "building", "floor", "unit", "lease"].map((t) => (
-                    <option key={t} value={t}>
-                      {
-                        {
-                          tenant: "Tenant",
-                          building: "Property",
-                          floor: "Floor",
-                          unit: "Flat or shop",
-                          lease: "Agreement",
-                        }[t]
-                      }
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Record">
-                <select
-                  required
-                  value={target}
-                  onChange={(e) => {
-                    setTarget(e.target.value);
-                    setRequestKey(crypto.randomUUID());
-                  }}
-                >
-                  <option value="">Choose a record</option>
-                  {choices(type).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </>
-          )}
-          <Field wide label="Document category">
-            <select
-              disabled={!!replace}
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setRequestKey(crypto.randomUUID());
-              }}
-            >
-              {documentCategories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-          <div className="span-2">
-            <label className="upload-drop">
-              <UploadSimple size={30} />
-              <strong>{file ? file.name : "Choose your file"}</strong>
-              <span>PDF, JPG, PNG or WebP · Up to 20 MB</span>
-              <input
-                type="file"
-                aria-label="Choose document file"
-                required
-                accept="application/pdf,image/jpeg,image/png,image/webp"
-                disabled={pending}
-                onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null);
-                  setRequestKey(crypto.randomUUID());
-                }}
+                />
+              </label>
+            </div>
+            {files.length > 0 && (
+              <ul className="upload-file-list span-2">
+                {files.map((item, index) => (
+                  <li key={item.key}>
+                    {previews[index] ? (
+                      <img src={previews[index]} alt="" />
+                    ) : (
+                      <FilePdf size={24} />
+                    )}
+                    <span>
+                      {item.file.name}
+                      <small>{fileSize(item.file.size)}</small>
+                    </span>
+                    {item.done && <ShieldCheck aria-label="Saved" size={18} />}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {property && category === "Photo" && (
+              <label className="checkbox-label span-2">
+                <input
+                  type="checkbox"
+                  checked={makeCover}
+                  onChange={(e) => setMakeCover(e.target.checked)}
+                />
+                Use {files.length > 1 ? "the first photo" : "this photo"} as the
+                property cover
+              </label>
+            )}
+            <p className="form-note span-2">
+              <ShieldCheck
+                size={16}
+                style={{ verticalAlign: "middle", marginRight: 8 }}
               />
-            </label>
+              Files are checked before they become available. Only permitted
+              team members can access them.
+            </p>
           </div>
-          <p className="form-note span-2">
-            <ShieldCheck
-              size={16}
-              style={{ verticalAlign: "middle", marginRight: 8 }}
-            />
-            Files are checked before they become available. Only permitted team
-            members can access them.
-          </p>
-        </div>
+        </fieldset>
         {pending && (
           <div className="upload-progress" role="status">
             {progress < 100
-              ? `Uploading… ${progress}%`
-              : "Scanning and saving your file…"}
+              ? `Uploading ${activeFile} of ${files.length}… ${progress}%`
+              : `Scanning and saving file ${activeFile} of ${files.length}…`}
             <progress max={100} value={progress} aria-label="Upload progress" />
           </div>
         )}
@@ -262,7 +387,11 @@ export function UploadModal({
             ) : (
               <>
                 <UploadSimple size={17} />
-                Upload document
+                {property
+                  ? partial
+                    ? "Retry remaining files"
+                    : "Upload files"
+                  : "Upload document"}
               </>
             )}
           </Button>
@@ -271,7 +400,7 @@ export function UploadModal({
     </Modal>
   );
 }
-function PreviewModal({
+export function PreviewModal({
   doc,
   onClose,
 }: {
@@ -339,6 +468,7 @@ export function DocumentPanel({
     (d) =>
       d.target_type === targetType &&
       d.target_id === targetId &&
+      d.status !== "archived" &&
       (history || d.status === "current"),
   );
   const canUpload = ["owner", "manager", "accountant"].includes(

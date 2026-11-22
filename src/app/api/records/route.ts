@@ -34,6 +34,29 @@ export async function POST(request: Request) {
       error: { code?: string; message: string } | null;
     };
     switch (body.action) {
+      case "property_cover": {
+        requireRole(member, true);
+        result = await db.rpc("set_property_cover", {
+          w,
+          id: uuid.parse(p.id),
+          building_id: uuid.parse(p.building_id),
+        });
+        break;
+      }
+      case "document_rename":
+      case "document_archive": {
+        requireRole(member, true);
+        result = await db.rpc("manage_document", {
+          w,
+          id: uuid.parse(p.id),
+          archive: body.action === "document_archive",
+          name:
+            body.action === "document_rename"
+              ? text(200).parse(p.name)
+              : undefined,
+        });
+        break;
+      }
       case "parking_allocate": {
         requireRole(member);
         const v = z

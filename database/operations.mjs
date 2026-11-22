@@ -56,6 +56,31 @@ async function find(connection, table, id, workspace) {
   if (!row) fail("The linked record was not found");
   return row;
 }
+async function setPropertyCover(connection, client, doc) {
+  const actor = { userId: client.userId || doc.uploaded_by };
+  if (
+    doc.target_type !== "building" ||
+    doc.category !== "Photo" ||
+    !doc.mime.startsWith("image/") ||
+    doc.status !== "current"
+  )
+    fail("Choose a current property photo for the cover");
+  const old = await one(
+    connection,
+    "select * from property_covers where building_id=? and workspace_id=? for update",
+    [doc.target_id, doc.workspace_id],
+  );
+  if (old)
+    await change(connection, actor, "property_covers", old, {
+      document_id: doc.id,
+    });
+  else
+    await add(connection, actor, "property_covers", {
+      workspace_id: doc.workspace_id,
+      building_id: doc.target_id,
+      document_id: doc.id,
+    });
+}
 export async function reminders(workspace = null, connection = null) {
   if (!connection) {
     if (!workspace) {
@@ -214,6 +239,8 @@ export async function operation(client, name, p) {
     "return_deposit",
     "end_lease",
     "register_scanned_document",
+    "set_property_cover",
+    "manage_document",
   ];
   if (!operations.includes(name)) fail("Unknown operation");
   let workspace = p.w || p.p?.workspace_id;
@@ -266,12 +293,65 @@ export async function operation(client, name, p) {
           status: "superseded",
         });
       }
-      const { replaces: _, ...fields } = doc;
-      return add(connection, client, "documents", {
+      const { replaces: _, make_cover, ...fields } = doc;
+      const id = await add(connection, client, "documents", {
         ...fields,
         group_id: group,
         version,
       });
+      if (doc.target_type === "building" && doc.category === "Photo") {
+        const cover = await one(
+          connection,
+          "select document_id from property_covers where building_id=? and workspace_id=?",
+          [doc.target_id, workspace],
+        );
+        if (make_cover || !cover || cover.document_id === doc.replaces)
+          await setPropertyCover(connection, client, {
+            ...fields,
+            id,
+            status: "current",
+          });
+      }
+      return id;
+    }
+    if (["set_property_cover", "manage_document"].includes(name)) {
+      await permission(connection, client, workspace, true);
+      const doc = await find(connection, "documents", p.id, workspace);
+      if (doc.status !== "current")
+        fail("This file has changed. Refresh and try again.");
+      if (name === "set_property_cover") {
+        if (doc.target_id !== p.building_id)
+          fail("Choose a photo from this property");
+        await setPropertyCover(connection, client, doc);
+      } else if (p.archive) {
+        await sql(
+          connection,
+          "delete from property_covers where document_id=? and workspace_id=?",
+          [doc.id, workspace],
+        );
+        // Preserve the original and its audit trail; archived files are no longer served.
+        await change(connection, client, "documents", doc, {
+          status: "archived",
+        });
+      } else {
+        if (
+          typeof p.name !== "string" ||
+          !p.name.trim() ||
+          p.name.length > 200 ||
+          [...p.name].some(
+            (char) =>
+              (char.codePointAt(0) ?? 0) < 32 ||
+              char === String.fromCharCode(127) ||
+              char === "/" ||
+              char === "\\",
+          )
+        )
+          fail("Enter a valid file name up to 200 characters");
+        await change(connection, client, "documents", doc, {
+          name: p.name.trim(),
+        });
+      }
+      return doc.id;
     }
     const finance = [
       "set_cheque_status",

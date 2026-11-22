@@ -40,6 +40,9 @@ export async function POST(request: Request) {
       .nullable()
       .parse(form.get("replaces") || null);
     const uploadKey = z.uuid().parse(form.get("request_key"));
+    const makeCover = form.get("make_cover") === "1";
+    if (makeCover && (target_type !== "building" || category !== "Photo"))
+      throw new AppError("Choose a property photo for the cover");
     const admin = adminClient();
     const { data: previousUpload } = await admin
       .from("documents")
@@ -177,6 +180,7 @@ export async function POST(request: Request) {
         scan_engine: scanEngine,
         uploaded_by: user.id,
         upload_key: uploadKey,
+        make_cover: makeCover,
       },
     });
     if (error)

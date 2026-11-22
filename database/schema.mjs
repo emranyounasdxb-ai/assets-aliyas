@@ -167,6 +167,11 @@ export const tables = {
     uploaded_by: "char(36) not null",
     upload_key: "char(36) not null unique",
   },
+  property_covers: {
+    workspace_id: "char(36) not null",
+    building_id: "char(36) not null",
+    document_id: "char(36) not null",
+  },
   notifications: {
     workspace_id: "char(36) not null",
     cheque_id: "char(36) not null",
@@ -243,6 +248,11 @@ export const constraints = {
     "foreign key(uploaded_by) references users(id)",
     "index(workspace_id,target_type,target_id)",
   ],
+  property_covers: [
+    "unique(building_id)",
+    "foreign key(building_id,workspace_id) references buildings(id,workspace_id)",
+    "foreign key(document_id,workspace_id) references documents(id,workspace_id)",
+  ],
   notifications: [
     "unique(cheque_id,kind)",
     "foreign key(cheque_id) references cheques(id)",
@@ -253,15 +263,18 @@ export const constraints = {
     "foreign key(user_id) references users(id)",
   ],
 };
-export function createStatements() {
-  return Object.entries(tables).map(
-    ([name, columns]) =>
-      `create table if not exists \`${name}\` (id char(36) primary key,created_at datetime(3) not null default current_timestamp(3),${Object.entries(
-        columns,
-      )
-        .map(([column, type]) => `\`${column}\` ${type}`)
-        .join(
-          ",",
-        )}${columns.workspace_id ? ",unique(id,workspace_id),index(workspace_id),foreign key(workspace_id) references workspaces(id)" : ""}${constraints[name]?.length ? `,${constraints[name].join(",")}` : ""}) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`,
-  );
+// Version 001 is immutable: existing installations verify its exact checksum.
+export function createStatements(version = 2) {
+  return Object.entries(tables)
+    .filter(([name]) => version > 1 || name !== "property_covers")
+    .map(
+      ([name, columns]) =>
+        `create table if not exists \`${name}\` (id char(36) primary key,created_at datetime(3) not null default current_timestamp(3),${Object.entries(
+          columns,
+        )
+          .map(([column, type]) => `\`${column}\` ${type}`)
+          .join(
+            ",",
+          )}${columns.workspace_id ? ",unique(id,workspace_id),index(workspace_id),foreign key(workspace_id) references workspaces(id)" : ""}${constraints[name]?.length ? `,${constraints[name].join(",")}` : ""}) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`,
+    );
 }

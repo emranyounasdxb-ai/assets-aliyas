@@ -84,6 +84,7 @@ export async function loadData(): Promise<AppData> {
     "parking_lots",
     "parking_allocations",
     "documents",
+    "property_covers",
     "notifications",
     "activities",
   ] as const;
@@ -152,6 +153,7 @@ export async function loadData(): Promise<AppData> {
     parkingLots: rows.parking_lots,
     parkingAllocations: rows.parking_allocations,
     documents: rows.documents,
+    propertyCovers: rows.property_covers,
     notifications: rows.notifications,
     activities: rows.activities,
     readNotifications: (reads ?? []).map((r) => r.notification_id),
