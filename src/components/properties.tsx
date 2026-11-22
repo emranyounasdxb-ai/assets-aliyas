@@ -19,6 +19,7 @@ import {
   pendingCheque,
   todayDubai,
   unitStatus,
+  propertyCover,
   type Building,
   type Unit,
 } from "@/lib/domain";
@@ -40,20 +41,19 @@ import {
   useList,
 } from "./ui";
 import { DocumentPanel } from "./documents";
+import { PropertyMedia } from "./property-media";
 export function PropertyCover({ building }: { building: Building }) {
   const { data } = useApp();
-  const photo = data.documents.find(
-    (d) =>
-      d.target_type === "building" &&
-      d.target_id === building.id &&
-      d.category === "Photo" &&
-      d.status === "current",
-  );
-  return photo ? (
+  const photo = propertyCover(data, building.id);
+  const [failed, setFailed] = useState("");
+  return photo && failed !== photo.id ? (
     <img
       src={`/api/documents/${photo.id}/file?preview=1`}
       alt={building.name}
       loading="lazy"
+      width={720}
+      height={480}
+      onError={() => setFailed(photo.id)}
     />
   ) : (
     <div className="property-placeholder">
@@ -374,6 +374,7 @@ export function PropertyDetail({ id }: { id: string }) {
           </div>
         </div>
       </div>
+      <PropertyMedia buildingId={id} />
       <div className="summary-strip">
         <div>
           <small>Total rental units</small>
@@ -552,11 +553,6 @@ export function PropertyDetail({ id }: { id: string }) {
           />
         </div>
       )}
-      <DocumentPanel
-        targetType="building"
-        targetId={id}
-        title="Property photos, maps & documents"
-      />
       {selected && (
         <UnitModal id={selected.id} onClose={() => setSelected(null)} />
       )}

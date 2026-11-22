@@ -188,11 +188,35 @@ export interface AppData {
   parkingLots: ParkingLot[];
   parkingAllocations: ParkingAllocation[];
   documents: DocumentRecord[];
+  propertyCovers: { id: string; building_id: string; document_id: string }[];
   notifications: Notification[];
   readNotifications: string[];
   activities: Activity[];
 }
 export const categories = ["Studio", "1 BHK", "2 BHK", "3 BHK"] as const;
+export function propertyCover(
+  data: Pick<AppData, "documents" | "propertyCovers">,
+  buildingId: string,
+) {
+  const photos = data.documents.filter(
+    (d) =>
+      d.target_type === "building" &&
+      d.target_id === buildingId &&
+      d.category === "Photo" &&
+      d.status === "current" &&
+      d.mime.startsWith("image/"),
+  );
+  const chosen = data.propertyCovers.find(
+    (c) => c.building_id === buildingId,
+  )?.document_id;
+  return (
+    photos.find((d) => d.id === chosen) ??
+    photos.sort(
+      (a, b) =>
+        a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+    )[0]
+  );
+}
 export function unitLabel(unit?: Pick<Unit, "category">) {
   return unit?.category === "Shop" ? "Shop" : "Flat";
 }

@@ -21,6 +21,7 @@ supabase/
 coverage/
 playwright-report/
 test-results/
+.playwright-mcp/
 *.tsbuildinfo
 *.log
 next-env.d.ts

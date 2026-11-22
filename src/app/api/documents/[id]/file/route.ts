@@ -25,10 +25,12 @@ export async function GET(
     return new Response(data, {
       status: 200,
       headers: {
-        "Content-Type": thumbnail ? "image/webp" : doc.mime,
+        "Content-Type":
+          thumbnail && doc.thumbnail_path ? "image/webp" : doc.mime,
         "Content-Length": String(data.length),
         "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
         "Cache-Control": "private, no-store",
+        Vary: "Cookie",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "sandbox; default-src 'none'",

@@ -76,6 +76,7 @@ async function cleanupWorkspace(id: string) {
   for (const table of [
     "activities",
     "notifications",
+    "property_covers",
     "documents",
     "ledger",
     "deposits",
@@ -452,6 +453,229 @@ test.describe.serial("Property management workspace", () => {
     );
     expect(publicFile.status()).not.toBe(200);
   });
+  test("manages property photos, cover thumbnails and documents in place", async () => {
+    const image = await sharp({
+      create: { width: 900, height: 600, channels: 3, background: "#c0a16b" },
+    })
+      .png()
+      .toBuffer();
+    await page.goto(`${origin}/properties/${building}`);
+    const media = page.getByRole("region", {
+      name: "Property photos and documents",
+    });
+    await media
+      .getByRole("button", { name: "Add photos", exact: true })
+      .click();
+    let form = page.getByRole("dialog");
+    await form.getByLabel("Choose document file").setInputFiles([
+      {
+        name: "verification-building-front.png",
+        mimeType: "image/png",
+        buffer: image,
+      },
+      {
+        name: "verification-building-side.png",
+        mimeType: "image/png",
+        buffer: image,
+      },
+    ]);
+    await form.getByLabel("Use the first photo as the property cover").check();
+    let interruptOnce = true;
+    await page.route("**/api/documents", async (route) => {
+      if (
+        interruptOnce &&
+        route
+          .request()
+          .postDataBuffer()
+          ?.includes(Buffer.from("verification-building-side.png"))
+      ) {
+        interruptOnce = false;
+        await route.fulfill({
+          status: 503,
+          json: { error: "Verification retry: temporary connection failure" },
+        });
+      } else await route.continue();
+    });
+    await form
+      .getByRole("button", { name: "Upload files", exact: true })
+      .click();
+    await expect(form.getByRole("alert")).toContainText("Verification retry", {
+      timeout: 60000,
+    });
+    await form
+      .getByRole("button", { name: "Retry remaining files", exact: true })
+      .click();
+    await expect(form).toHaveCount(0, { timeout: 60000 });
+    await page.unroute("**/api/documents");
+    await expect(media.locator(".property-file")).toHaveCount(3);
+    let cover = required((await readRows("property_covers"))[0]);
+    const front = required(
+      (await readRows("documents")).find(
+        (d) => d.name === "verification-building-front.png",
+      ),
+    );
+    const side = required(
+      (await readRows("documents")).find(
+        (d) => d.name === "verification-building-side.png",
+      ),
+    );
+    expect(cover.document_id).toBe(front.id);
+    await expect(page.locator(".detail-art img")).toHaveAttribute(
+      "src",
+      `/api/documents/${front.id}/file?preview=1`,
+    );
+    await media
+      .getByRole("button", {
+        name: "Set verification-building-side.png as cover",
+      })
+      .click();
+    await expect(page.locator(".detail-art img")).toHaveAttribute(
+      "src",
+      `/api/documents/${side.id}/file?preview=1`,
+    );
+    await media
+      .getByRole("button", {
+        name: "Edit verification-building-side.png",
+        exact: true,
+      })
+      .click();
+    form = page.getByRole("dialog");
+    await form
+      .getByLabel("File name", { exact: true })
+      .fill("Verification side elevation.png");
+    await form.getByRole("button", { name: "Save name", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await media
+      .getByRole("button", {
+        name: "Preview Verification side elevation.png",
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole("dialog").locator("img")).toHaveAttribute(
+      "src",
+      `/api/documents/${side.id}/file`,
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Close dialog", exact: true })
+      .click();
+    // Replacing a cover carries the selection to the new version.
+    const replacement = await context.request.post(`${origin}/api/documents`, {
+      headers: { origin },
+      multipart: {
+        file: {
+          name: "verification-side-v2.png",
+          mimeType: "image/png",
+          buffer: image,
+        },
+        target_type: "building",
+        target_id: building,
+        category: "Photo",
+        replaces: side.id,
+        request_key: randomUUID(),
+      },
+    });
+    expect(replacement.ok(), await replacement.text()).toBe(true);
+    const replacementId = (await replacement.json()).id;
+    cover = required((await readRows("property_covers"))[0]);
+    expect(cover.document_id).toBe(replacementId);
+    const foreign = await checkedAction("building", {
+      name: "Verification other property",
+      code: `MEDIA-${randomUUID().slice(0, 6)}`,
+      area: "Test area",
+      floor_count: 0,
+    });
+    expect(
+      (
+        await action("property_cover", {
+          id: front.id,
+          building_id: foreign.result,
+        })
+      ).ok(),
+    ).toBe(false);
+    expect(
+      (
+        await action("property_cover", {
+          id: documentId,
+          building_id: building,
+        })
+      ).ok(),
+    ).toBe(false);
+    await page.reload();
+    await media
+      .getByRole("button", {
+        name: "Archive verification-side-v2.png",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Archive file", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(
+      (
+        await context.request.get(
+          `${origin}/api/documents/${replacementId}/file`,
+        )
+      ).status(),
+    ).toBe(404);
+    await expect(page.locator(".detail-art img")).toHaveAttribute(
+      "src",
+      `/api/documents/${propertyPhoto}/file?preview=1`,
+    );
+    await media
+      .getByRole("button", { name: "Add documents", exact: true })
+      .click();
+    form = page.getByRole("dialog");
+    await form.getByLabel("Document category").selectOption("Floor plan");
+    await form.getByLabel("Choose document file").setInputFiles({
+      name: "verification-property-map.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n% Fictional verification fixture\n%%EOF"),
+    });
+    await form
+      .getByRole("button", { name: "Upload files", exact: true })
+      .click();
+    await expect(form).toHaveCount(0, { timeout: 60000 });
+    await expect(
+      media.getByText("verification-property-map.pdf", { exact: true }),
+    ).toBeVisible();
+    const map = required(
+      (await readRows("documents")).find(
+        (d) => d.name === "verification-property-map.pdf",
+      ),
+    );
+    expect(
+      (
+        await context.request.get(
+          `${origin}/api/documents/${map.id}/file?preview=1`,
+        )
+      ).headers()["content-type"],
+    ).toBe("application/pdf");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await media.getByRole("tab", { name: /Maps & documents/ }).focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(media.getByRole("tab", { name: /Photos/ })).toBeFocused();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await media
+      .getByRole("button", { name: "Add photos", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    expect(
+      await page
+        .getByRole("dialog")
+        .evaluate((d) => d.getBoundingClientRect().right <= innerWidth),
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  });
   test("accepts a supported document larger than the framework default body buffer", async () => {
     const padding = Buffer.alloc(11 * 1024 * 1024, 32);
     const pdf = Buffer.concat([
@@ -576,6 +800,18 @@ test.describe.serial("Property management workspace", () => {
         snapshot.documents.some((d: { id: string }) => d.id === documentId),
       ).toBe(false);
       if (role === "outsider") expect(snapshot.tenants).toHaveLength(0);
+      for (const operation of [
+        "property_cover",
+        "document_rename",
+        "document_archive",
+      ]) {
+        const denied = await action(
+          operation,
+          { id: propertyPhoto, building_id: building, name: "Forbidden.png" },
+          other,
+        );
+        expect(denied.ok()).toBe(false);
+      }
       expect(
         (
           await other.request.get(`${origin}/api/documents/${documentId}/file`)

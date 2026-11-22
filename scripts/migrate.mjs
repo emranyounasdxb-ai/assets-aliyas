@@ -16,7 +16,7 @@ try {
     !/^8\.[04]\./.test(version)
   )
     throw new Error("Verify MariaDB/MySQL compatibility before migrating");
-  const statements = createStatements();
+  const statements = createStatements(1);
   const checksum = createHash("sha256")
     .update(statements.join("\n"))
     .digest("hex");
@@ -38,6 +38,27 @@ try {
     connection,
     "insert ignore into schema_migrations(version,checksum) values(?,?)",
     ["001_self_hosted", checksum],
+  );
+  const media = createStatements().filter((s) =>
+    s.startsWith("create table if not exists `property_covers`"),
+  );
+  const mediaChecksum = createHash("sha256")
+    .update(media.join("\n"))
+    .digest("hex");
+  const appliedMedia = await sql(
+    connection,
+    "select checksum from schema_migrations where version=?",
+    ["002_property_media"],
+  );
+  assert.ok(
+    !appliedMedia.length || appliedMedia[0].checksum === mediaChecksum,
+    "Property media migration checksum changed",
+  );
+  for (const statement of media) await sql(connection, statement);
+  await sql(
+    connection,
+    "insert ignore into schema_migrations(version,checksum) values(?,?)",
+    ["002_property_media", mediaChecksum],
   );
   console.log("Assets database schema ready; existing records preserved.");
 } finally {
